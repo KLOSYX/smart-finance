@@ -4,7 +4,7 @@ import plotly.express as px
 import json
 import os
 from src.pdf_processor import extract_text_from_pdf, anonymize_text
-from src.llm_client import analyze_transactions, generate_financial_advice, get_categories, chat_with_data
+from src.llm_client import analyze_transactions, get_categories, chat_with_data, agentic_financial_advice
 
 CONFIG_FILE = "config.json"
 
@@ -21,6 +21,26 @@ def save_config(config):
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
+@st.dialog("📋 交易明细")
+def show_category_details(category, df):
+    st.write(f"**{category}** 类别的所有支出记录：")
+    
+    # Format and display
+    display_df = df[["Date", "Description", "Amount", "Source"]].copy()
+    display_df = display_df.sort_values("Date", ascending=False)
+    
+    st.dataframe(
+        display_df,
+        column_config={
+            "Date": "日期",
+            "Description": "描述",
+            "Amount": st.column_config.NumberColumn("金额", format="¥%.2f"),
+            "Source": "来源"
+        },
+        use_container_width=True,
+        hide_index=True
+    )
+
 st.set_page_config(page_title="AI财务分析器", layout="wide")
 
 def main():
@@ -36,8 +56,8 @@ def main():
         
         # API Configuration
         api_key = st.text_input("API 密钥", value=config.get("api_key", ""), type="password", help="输入您的LLM API密钥")
-        base_url = st.text_input("基础URL", value=config.get("base_url", "https://api.openai.com/v1"), help="API基础URL")
-        model_name = st.text_input("模型名称", value=config.get("model_name", "gpt-3.5-turbo"), help="模型名称")
+        base_url = st.text_input("基础URL", value=config.get("base_url", "https://openrouter.ai/api/v1"), help="API基础URL")
+        model_name = st.text_input("模型名称", value=config.get("model_name", "qwen/qwen3-next-80b-a3b-instruct"), help="模型名称")
         
         st.divider()
         st.header("财务背景 (可选)")
@@ -46,8 +66,8 @@ def main():
         default_income = config.get("monthly_income", 0.0)
         default_investment = config.get("investments", 0.0)
         
-        monthly_income = st.number_input("月收入 ($", value=float(default_income), min_value=0.0, step=100.0, help="您的月度税后收入")
-        investments = st.number_input("当前投资资产 ($", value=float(default_investment), min_value=0.0, step=1000.0, help="您目前的投资总额")
+        monthly_income = st.number_input("月收入 (¥)", value=float(default_income), min_value=0.0, step=100.0, help="您的月度税后收入")
+        investments = st.number_input("当前投资资产 (¥)", value=float(default_investment), min_value=0.0, step=1000.0, help="您目前的投资总额")
         
         # Save Config Button
         if st.button("💾 保存配置"):
@@ -61,6 +81,28 @@ def main():
             save_config(new_config)
             st.success("配置已保存！下次启动时将自动加载。")
         
+        st.divider()
+        
+        # --- Manual Entry Section ---
+        st.header("📝 手动记账")
+        with st.form("manual_entry_form", clear_on_submit=True):
+            m_date = st.date_input("日期")
+            m_desc = st.text_input("描述", placeholder="例如：早餐")
+            m_amount = st.number_input("金额 (¥)", min_value=0.0, step=1.0)
+            m_category = st.selectbox("类别", options=get_categories())
+            
+            if st.form_submit_button("➕ 添加支出"):
+                new_transaction = {
+                    "Date": str(m_date),
+                    "Description": m_desc,
+                    "Amount": float(m_amount),
+                    "Category": m_category,
+                    "Source": "手动录入"
+                }
+                st.session_state.transactions.append(new_transaction)
+                st.success("已添加！")
+                st.rerun()
+
         st.divider()
         st.info("您的数据在发送到AI模型之前会在内存中处理并匿名化。")
 
@@ -216,40 +258,155 @@ def main():
         st.divider()
         st.subheader("📊 财务分析")
         
-        col1, col2 = st.columns(2)
-        
-        # Calculate Stats
-        # Treat '需要复核' as '其他' for visualization purposes if user didn't fix them
+        # Prepare Data for Visualization
         viz_df = edited_df.copy()
+        # Treat '需要复核' as '其他'
         viz_df.loc[viz_df['Category'] == '需要复核', 'Category'] = '其他'
         
-        total_expense = viz_df[viz_df['Amount'] > 0]['Amount'].sum()
-        category_summary = viz_df[viz_df['Amount'] > 0].groupby("Category")['Amount'].sum().reset_index()
+        # Ensure Date is datetime
+        viz_df['Date'] = pd.to_datetime(viz_df['Date'], errors='coerce')
+        viz_df = viz_df.sort_values('Date')
         
-        with col1:
-            st.metric("总支出", f"${total_expense:,.2f}")
+        # Filter positive expenses only for charts
+        expense_df = viz_df[viz_df['Amount'] > 0]
+        
+        # Track selection state; use a version key to force rerender when clearing
+        if "chart_selection_version" not in st.session_state:
+            st.session_state.chart_selection_version = 0
+        if "last_chart_selection" not in st.session_state:
+            st.session_state.last_chart_selection = None
+        
+        # Variable to hold selection from charts
+        chart_selected_category = None
+        should_show_dialog = False
+        selection_token = None
+        
+        # Tabs for different views
+        tab1, tab2, tab3 = st.tabs(["📈 概览", "📅 趋势", "🏢 商户"])
+        
+        with tab1:
+            # Key Metrics Row
+            total_expense = expense_df['Amount'].sum()
+            avg_expense = expense_df['Amount'].mean() if not expense_df.empty else 0
+            max_expense = expense_df['Amount'].max() if not expense_df.empty else 0
+            tx_count = len(expense_df)
             
-            # Pie Chart
-            if not category_summary.empty:
-                fig_pie = px.pie(category_summary, values='Amount', names='Category', title='支出分布')
-                st.plotly_chart(fig_pie, use_container_width=True)
-            else:
-                st.info("没有支出可显示。")
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("总支出", f"¥{total_expense:,.2f}")
+            m2.metric("交易笔数", f"{tx_count}")
+            m3.metric("平均单笔", f"¥{avg_expense:,.2f}")
+            m4.metric("最大单笔", f"¥{max_expense:,.2f}")
+            
+            st.divider()
+            
+            c1, c2 = st.columns(2)
+            category_summary = expense_df.groupby("Category")['Amount'].sum().reset_index()
+            
+            with c1:
+                if not category_summary.empty:
+                    fig_pie = px.pie(category_summary, values='Amount', names='Category', title='支出类别占比 (点击查看明细)', hole=0.3)
+                    pie_event = st.plotly_chart(
+                        fig_pie,
+                        use_container_width=True,
+                        on_select="rerun",
+                        selection_mode="points",
+                        key=f"pie_select_{st.session_state.chart_selection_version}"
+                    )
+                    
+                    if pie_event and pie_event["selection"]["points"]:
+                        point = pie_event["selection"]["points"][0]
+                        chart_selected_category = point.get("label") or point.get("x")
+                        selection_token = ("pie", chart_selected_category)
+                else:
+                    st.info("暂无数据")
 
-        with col2:
-            # Bar Chart (Trend or Category breakdown)
-            if not category_summary.empty:
-                fig_bar = px.bar(category_summary, x='Category', y='Amount', title='按类别划分的支出', color='Category')
-                st.plotly_chart(fig_bar, use_container_width=True)
+            with c2:
+                if not category_summary.empty:
+                    fig_bar = px.bar(category_summary, x='Category', y='Amount', title='各类别支出金额 (点击查看明细)', color='Category', text_auto='.2s')
+                    bar_event = st.plotly_chart(
+                        fig_bar,
+                        use_container_width=True,
+                        on_select="rerun",
+                        selection_mode="points",
+                        key=f"bar_select_{st.session_state.chart_selection_version}"
+                    )
+
+                    if bar_event and bar_event["selection"]["points"]:
+                        point = bar_event["selection"]["points"][0]
+                        # For bar charts, Plotly selection carries category in `x`
+                        chart_selected_category = point.get("x")
+                        selection_token = ("bar", chart_selected_category)
+                else:
+                    st.info("暂无数据")
+            
+            # Clear selection manually to avoid sticky highlights
+            if st.button("清除选中", type="secondary", help="取消图表选中，防止重复弹窗。", key="clear_chart_selection"):
+                st.session_state.last_chart_selection = None
+                st.session_state.chart_selection_version += 1
+                st.rerun()
+
+        # Only trigger dialog when a NEW selection occurs
+        if selection_token != st.session_state.last_chart_selection:
+            st.session_state.last_chart_selection = selection_token
+            if selection_token:
+                should_show_dialog = True
+        else:
+            chart_selected_category = None
+
+        # Trigger Dialog if selection occurred (Outside Tabs)
+        if should_show_dialog and chart_selected_category:
+            # Filter transactions for this category
+            detail_df = expense_df[expense_df["Category"] == chart_selected_category]
+            show_category_details(chart_selected_category, detail_df)
+
+        with tab2:
+            st.markdown("#### 每日支出趋势")
+            if not expense_df.empty:
+                # Group by Date
+                daily_trend = expense_df.groupby('Date')['Amount'].sum().reset_index()
+                fig_line = px.line(daily_trend, x='Date', y='Amount', markers=True, title='每日支出走势')
+                st.plotly_chart(fig_line, use_container_width=True)
+                
+                # Scatter plot for outliers
+                st.markdown("#### 交易分布 (气泡图)")
+                fig_scatter = px.scatter(expense_df, x='Date', y='Amount', color='Category', size='Amount', hover_data=['Description'], title='单笔交易分布')
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            else:
+                st.info("暂无数据")
+
+        with tab3:
+            st.markdown("#### 消费最高的商户 (Top 10)")
+            if not expense_df.empty:
+                # Group by Description (Merchant)
+                merchant_stats = expense_df.groupby('Description')['Amount'].sum().reset_index()
+                top_merchants = merchant_stats.sort_values('Amount', ascending=False).head(10)
+                
+                fig_h_bar = px.bar(top_merchants, x='Amount', y='Description', orientation='h', title='Top 10 商户支出', text_auto='.2s')
+                fig_h_bar.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_h_bar, use_container_width=True)
+            else:
+                st.info("暂无数据")
 
         # --- AI Advice Section ---
         st.divider()
         st.subheader("🤖 AI财务顾问")
         
-        if st.button("生成建议"):
-            with st.spinner("正在分析您的消费习惯..."):
-                advice = generate_financial_advice(category_summary, api_key, base_url, model_name, monthly_income, investments)
-                st.markdown(advice)
+        # Initialize advice in session state
+        if "advice" not in st.session_state:
+            st.session_state.advice = None
+
+        if st.button("生成建议 (Agent模式)"):
+            with st.spinner("AI正在编写代码深入分析您的财务数据..."):
+                # Use the full dataframe (expense_df or viz_df) for deep analysis
+                # expense_df contains only positive amounts, which is usually what we want for expense analysis.
+                # But viz_df has everything (including negative refunds?), let's pass expense_df to be safe for "Spending Analysis"
+                # Actually, passing viz_df is better if we want to see refunds, but for simplicity let's pass expense_df.
+                advice = agentic_financial_advice(expense_df, api_key, base_url, model_name, monthly_income, investments)
+                st.session_state.advice = advice
+        
+        # Display advice if it exists
+        if st.session_state.advice:
+            st.markdown(st.session_state.advice)
 
     elif not uploaded_files:
         st.info("上传PDF账单以开始。")
@@ -286,28 +443,21 @@ def main():
             if "Category" in chat_df.columns and "Amount" in chat_df.columns:
                  # Clean amount
                 chat_df['Amount'] = pd.to_numeric(chat_df['Amount'], errors='coerce').fillna(0)
-                
-                # Context Summary
-                total_exp = chat_df[chat_df['Amount'] > 0]['Amount'].sum()
-                cat_summary = chat_df[chat_df['Amount'] > 0].groupby("Category")['Amount'].sum().reset_index().to_string(index=False)
-                
-                context_data = f"Total Expenses: ${total_exp:,.2f}\n\nCategory Breakdown:\n{cat_summary}"
-                if monthly_income > 0:
-                    context_data += f"\n\nMonthly Income: ${monthly_income:,.2f}"
-                if investments > 0:
-                    context_data += f"\nCurrent Investments: ${investments:,.2f}"
-            else:
-                context_data = "No transaction data available yet."
-
+                # Ensure Date is datetime
+                if 'Date' in chat_df.columns:
+                    chat_df['Date'] = pd.to_datetime(chat_df['Date'], errors='coerce')
+            
             with st.chat_message("assistant"):
-                with st.spinner("AI思考中..."):
+                with st.spinner("AI正在思考并分析数据..."): # Updated spinner text
                     response = chat_with_data(
-                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages if m["role"] != "system"], # Pass history without system prompt (it's added in func)
+                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages if m["role"] != "system"], 
                         prompt,
-                        context_data,
+                        chat_df, # Pass DataFrame directly!
                         api_key,
                         base_url,
-                        model_name
+                        model_name,
+                        monthly_income,
+                        investments
                     )
                     st.markdown(response)
             
