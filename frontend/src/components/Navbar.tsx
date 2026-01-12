@@ -33,7 +33,6 @@ export default function Navbar({ onNavigate, activePage }: NavbarProps) {
     fontWeight: activePage === page ? 600 : 400,
     backgroundColor: activePage === page ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
     color: 'white',
-    borderRadius: 2,
     px: 2.5,
     py: 1,
     mx: 0.5,
@@ -57,6 +56,7 @@ export default function Navbar({ onNavigate, activePage }: NavbarProps) {
         transition: 'top 300ms ease-in-out',
         background: `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
         backdropFilter: 'blur(20px)',
+        borderRadius: 0,
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
       }}
     >
