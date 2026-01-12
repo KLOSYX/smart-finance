@@ -254,7 +254,7 @@ export default function Transactions() {
                         {
                             field: 'description',
                             headerName: '描述',
-                            width: 350,
+                            flex: 1,
                             minWidth: 200,
                         },
                         {
@@ -290,7 +290,7 @@ export default function Transactions() {
                                 </Typography>
                             )
                         },
-                        { field: 'source', headerName: '来源', width: 110 },
+                        { field: 'source', headerName: '来源', width: 140 },
                     ]}
                     loading={loading}
                     initialState={{
