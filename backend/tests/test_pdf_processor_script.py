@@ -1,4 +1,5 @@
-from src.pdf_processor import anonymize_text
+from app.services.pdf_processor import anonymize_text
+
 
 def test_anonymize():
     sample_text = """
@@ -9,22 +10,23 @@ def test_anonymize():
     Another card: 4000-1234-5678-9010
     Bill date: 2023-10-01. Amount: 1000.
     """
-    
+
     anonymized = anonymize_text(sample_text)
     print("Original:\n", sample_text)
     print("-" * 20)
     print("Anonymized:\n", anonymized)
-    
+
     assert "[EMAIL_REDACTED]" in anonymized
     assert "test.user@example.com" not in anonymized
     assert "[PHONE_REDACTED]" in anonymized
     assert "13800138000" not in anonymized
     assert "[CC_REDACTED]" in anonymized
     assert "4111 1111 1111 1111" not in anonymized
-    
+
     # Ensure dates/amounts are preserved (rudimentary check)
     assert "2023-10-01" in anonymized
     assert "1000" in anonymized
+
 
 if __name__ == "__main__":
     test_anonymize()
