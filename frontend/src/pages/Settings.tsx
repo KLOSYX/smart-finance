@@ -12,23 +12,22 @@ export default function SettingsPage() {
     });
     const [msg, setMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-    const loadSettings = async () => {
-        try {
-            const data = await getSettings();
-            setSettings({
-                api_key: data.api_key || '',
-                base_url: data.base_url || '',
-                model_name: data.model_name || '',
-                monthly_income: data.monthly_income || '',
-                investments: data.investments || ''
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
     useEffect(() => {
-        loadSettings();
+        const fetchSettings = async () => {
+            try {
+                const data = await getSettings();
+                setSettings({
+                    api_key: data.api_key || '',
+                    base_url: data.base_url || '',
+                    model_name: data.model_name || '',
+                    monthly_income: data.monthly_income || '',
+                    investments: data.investments || ''
+                });
+            } catch (error) {
+                console.error(error);
+            }
+        };
+        fetchSettings();
     }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
