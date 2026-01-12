@@ -285,9 +285,11 @@ export default function Transactions() {
                             align: 'right',
                             headerAlign: 'right',
                             renderCell: (params: GridRenderCellParams) => (
-                                <Typography sx={{ color: params.value > 0 ? 'error.main' : 'success.main', fontWeight: 600 }}>
-                                    {Number(params.value).toFixed(2)}
-                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: '100%', width: '100%' }}>
+                                    <Typography sx={{ color: params.value > 0 ? 'error.main' : 'success.main', fontWeight: 600 }}>
+                                        {Number(params.value).toFixed(2)}
+                                    </Typography>
+                                </Box>
                             )
                         },
                         { field: 'source', headerName: '来源', width: 140 },
