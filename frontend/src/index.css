@@ -1,109 +1,190 @@
+/* Google Fonts Import - Modern Professional Typography */
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+/* CSS Custom Properties - Design System */
+:root {
+  /* Colors - Financial Dashboard Palette */
+  --color-primary: #3B82F6;
+  --color-primary-light: #60A5FA;
+  --color-primary-dark: #2563EB;
+  --color-cta: #F97316;
+  --color-bg: #F8FAFC;
+  --color-bg-paper: #FFFFFF;
+  --color-text: #1E293B;
+  --color-text-secondary: #475569;
+  --color-border: #E2E8F0;
+  --color-success: #10B981;
+  --color-error: #EF4444;
+
+  /* Spacing Scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 200ms ease-in-out;
+  --transition-slow: 300ms ease-in-out;
+}
+
+/* Global Resets */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Roboto', sans-serif;
-  background-color: #f5f5f5;
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
-
   width: 100%;
-
-  height: 100vh;
-
+  min-height: 100vh;
 }
 
+/* Headings - Poppins Font */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
 
+/* Accessibility - Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
-/* Markdown Styles */
+/* Focus Visible - Keyboard Navigation */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 
+/* Markdown Styles - Chat Page */
 .markdown-content {
-
-  line-height: 1.6;
-
+  line-height: 1.7;
+  color: var(--color-text);
 }
-
-
 
 .markdown-content p {
-
-  margin-bottom: 12px;
-
+  margin-bottom: 1rem;
 }
 
-
-
-.markdown-content ul, .markdown-content ol {
-
-  margin-bottom: 12px;
-
-  padding-left: 24px;
-
+.markdown-content ul,
+.markdown-content ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
 }
-
-
 
 .markdown-content li {
-
-  margin-bottom: 4px;
-
+  margin-bottom: 0.5rem;
 }
 
-
-
-.markdown-content h1, .markdown-content h2, .markdown-content h3 {
-
-  margin-top: 16px;
-
-  margin-bottom: 8px;
-
-  font-weight: bold;
-
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
+.markdown-content h1 {
+  font-size: 1.75rem;
+}
 
+.markdown-content h2 {
+  font-size: 1.5rem;
+}
+
+.markdown-content h3 {
+  font-size: 1.25rem;
+}
+
+.markdown-content code {
+  background-color: #F1F5F9;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #E11D48;
+}
+
+.markdown-content pre {
+  background-color: #F1F5F9;
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.markdown-content pre code {
+  background-color: transparent;
+  padding: 0;
+  color: var(--color-text);
+}
 
 .markdown-content table {
-
   border-collapse: collapse;
-
   width: 100%;
-
-  margin-bottom: 16px;
-
+  margin-bottom: 1.5rem;
 }
 
-
-
-.markdown-content th, .markdown-content td {
-
-  border: 1px solid #ddd;
-
-  padding: 8px;
-
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--color-border);
+  padding: 0.75rem;
   text-align: left;
-
 }
-
-
 
 .markdown-content th {
-
-  background-color: #f2f2f2;
-
+  background-color: #F8FAFC;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
-/* Typing Indicator Animation */
+.markdown-content a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.markdown-content a:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+/* Typing Indicator Animation - Chat */
 .typing-dots {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 0.5rem;
 }
 
 .typing-dots span {
-  width: 6px;
-  height: 6px;
-  background-color: #6b7280;
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-text-secondary);
   border-radius: 50%;
   display: inline-block;
   animation: dot-flashing 1.4s infinite linear;
@@ -118,7 +199,32 @@ body {
 }
 
 @keyframes dot-flashing {
-  0% { opacity: 0.2; }
-  20% { opacity: 1; }
-  100% { opacity: 0.2; }
+  0% {
+    opacity: 0.3;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
 }

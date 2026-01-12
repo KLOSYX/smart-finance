@@ -1,46 +1,97 @@
+import { useState, useEffect } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { TrendingUp } from '@mui/icons-material';
+import { colors } from '../theme';
 
 interface NavbarProps {
-    onNavigate: (page: string) => void;
-    activePage: string;
+  onNavigate: (page: string) => void;
+  activePage: string;
 }
 
 export default function Navbar({ onNavigate, activePage }: NavbarProps) {
+  const [prevScrollPos, setPrevScrollPos] = useState(0);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollPos = window.scrollY;
+      const isVisible = prevScrollPos > currentScrollPos || currentScrollPos < 10;
+
+      setPrevScrollPos(currentScrollPos);
+      setVisible(isVisible);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [prevScrollPos]);
+
   const getButtonStyle = (page: string) => ({
-    fontWeight: activePage === page ? 'bold' : 'normal',
-    borderBottom: activePage === page ? '2px solid white' : '2px solid transparent',
-    borderRadius: 0,
-    mx: 1
+    fontWeight: activePage === page ? 600 : 400,
+    backgroundColor: activePage === page ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+    color: 'white',
+    borderRadius: 2,
+    px: 2.5,
+    py: 1,
+    mx: 0.5,
+    transition: 'all 200ms ease-in-out',
+    cursor: 'pointer',
+    '&:hover': {
+      backgroundColor: activePage === page
+        ? 'rgba(255, 255, 255, 0.2)'
+        : 'rgba(255, 255, 255, 0.1)',
+    },
   });
 
   return (
-    <Box sx={{ flexGrow: 1 }}>
-      <AppBar position="static" elevation={2}>
-        <Toolbar>
-          <IconButton
-            size="large"
-            edge="start"
-            color="inherit"
-            aria-label="menu"
-            sx={{ mr: 2 }}
+    <AppBar
+      position="fixed"
+      elevation={0}
+      sx={{
+        top: visible ? 0 : -80,
+        left: 0,
+        right: 0,
+        transition: 'top 300ms ease-in-out',
+        background: `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
+        backdropFilter: 'blur(20px)',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+      }}
+    >
+      <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <TrendingUp sx={{ fontSize: 32, color: 'white' }} />
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              fontWeight: 700,
+              fontFamily: 'Poppins, sans-serif',
+              letterSpacing: '-0.5px',
+              display: { xs: 'none', sm: 'block' },
+            }}
           >
-            <AccountBalanceWalletIcon />
-          </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 'bold' }}>
             AI 智能理财
           </Typography>
-          <Button color="inherit" onClick={() => onNavigate('dashboard')} sx={getButtonStyle('dashboard')}>仪表盘</Button>
-          <Button color="inherit" onClick={() => onNavigate('transactions')} sx={getButtonStyle('transactions')}>交易明细</Button>
-          <Button color="inherit" onClick={() => onNavigate('chat')} sx={getButtonStyle('chat')}>AI 顾问</Button>
-          <Button color="inherit" onClick={() => onNavigate('settings')} sx={getButtonStyle('settings')}>设置</Button>
-        </Toolbar>
-      </AppBar>
-    </Box>
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <Button onClick={() => onNavigate('dashboard')} sx={getButtonStyle('dashboard')}>
+            仪表盘
+          </Button>
+          <Button onClick={() => onNavigate('transactions')} sx={getButtonStyle('transactions')}>
+            交易明细
+          </Button>
+          <Button onClick={() => onNavigate('chat')} sx={getButtonStyle('chat')}>
+            AI 顾问
+          </Button>
+          <Button onClick={() => onNavigate('settings')} sx={getButtonStyle('settings')}>
+            设置
+          </Button>
+        </Box>
+      </Toolbar>
+    </AppBar>
   );
 }

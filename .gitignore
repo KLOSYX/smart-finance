@@ -1,0 +1,5 @@
+.agent/
+.shared/
+.ruff_cache/
+.pytest_cache/
+.vscode/

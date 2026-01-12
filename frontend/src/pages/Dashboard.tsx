@@ -3,13 +3,15 @@ import {
     Box, Paper, Typography, Card, CardContent, CircularProgress,
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    useTheme
+    Alert
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { BarChart } from '@mui/x-charts/BarChart';
 import { PieChart } from '@mui/x-charts/PieChart';
+import { TrendingUp, AccountBalance } from '@mui/icons-material';
 import { getStats, getTransactions } from '../api';
 import type { Transaction } from '../api';
+import { colors } from '../theme';
 
 interface CategorySummary {
     Category: string;
@@ -22,11 +24,21 @@ interface Stats {
     category_summary: CategorySummary[];
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#8dd1e1', '#a4de6c'];
+// Trust Blue color palette for charts
+const CHART_COLORS = [
+    colors.primary.main,
+    colors.primary.light,
+    colors.cta.main,
+    colors.success.main,
+    '#8B5CF6',
+    '#EC4899',
+    '#F59E0B',
+    '#10B981',
+];
 
 export default function Dashboard() {
-    const theme = useTheme();
     const [stats, setStats] = useState<Stats | null>(null);
+    const [loading, setLoading] = useState(true);
 
     // Drill down state
     const [openDialog, setOpenDialog] = useState(false);
@@ -35,17 +47,18 @@ export default function Dashboard() {
     const [loadingDetails, setLoadingDetails] = useState(false);
 
     useEffect(() => {
-        loadStats();
+        const fetchStats = async () => {
+            try {
+                const data = await getStats();
+                setStats(data);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
     }, []);
-
-    const loadStats = async () => {
-        try {
-            const data = await getStats();
-            setStats(data);
-        } catch (error) {
-            console.error(error);
-        }
-    };
 
     const openDetails = async (category: string) => {
         setSelectedCategory(category);
@@ -69,83 +82,162 @@ export default function Dashboard() {
         }
     };
 
-    if (!stats) {
+    if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
-                <CircularProgress />
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 2 }}>
+                <CircularProgress size={60} thickness={4} />
+                <Typography variant="body1" color="text.secondary">加载中...</Typography>
             </Box>
         );
     }
 
-    // Prepare data for MUI X Charts Pie Chart
+    if (!stats || stats.category_summary.length === 0) {
+        return (
+            <Box sx={{ py: 8 }}>
+                <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto', borderRadius: 3 }}>
+                    <Typography variant="h6" gutterBottom>暂无数据</Typography>
+                    <Typography variant="body2">
+                        请前往 <strong>交易明细</strong> 页面上传您的账单，开始使用智能理财分析功能。
+                    </Typography>
+                </Alert>
+            </Box>
+        );
+    }
+
+    // Prepare data for charts
     const pieChartData = stats.category_summary.map((item: CategorySummary, index: number) => ({
         id: index,
         value: item.Amount,
         label: item.Category,
-        color: COLORS[index % COLORS.length]
+        color: CHART_COLORS[index % CHART_COLORS.length]
     }));
 
     return (
         <Box sx={{ width: '100%', pb: 4 }}>
-            <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>财务概览</Typography>
+            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <TrendingUp sx={{ fontSize: 40, color: 'primary.main' }} />
+                <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
+                    财务概览
+                </Typography>
+            </Box>
 
+            {/* Key Metrics Card */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, md: 4 }}>
-                    <Card elevation={3} sx={{
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        background: `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.primary.light} 90%)`
-                    }}>
-                        <CardContent>
-                            <Typography variant="h6" gutterBottom sx={{ opacity: 0.9 }}>总支出</Typography>
-                            <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-                                ¥{stats.total_expense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <Card
+                        elevation={0}
+                        sx={{
+                            background: `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
+                            color: 'white',
+                            borderRadius: 4,
+                            cursor: 'default',
+                            transition: 'transform 200ms ease-in-out, box-shadow 200ms ease-in-out',
+                            '&:hover': {
+                                transform: 'translateY(-4px)',
+                                boxShadow: '0 12px 24px rgba(59, 130, 246, 0.3)',
+                            }
+                        }}
+                    >
+                        <CardContent sx={{ p: 3 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                                <AccountBalance sx={{ fontSize: 28, opacity: 0.9 }} />
+                                <Typography variant="subtitle1" sx={{ opacity: 0.9, fontWeight: 500 }}>
+                                    总支出
+                                </Typography>
+                            </Box>
+                            <Typography variant="h3" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
+                                ¥{stats.total_expense.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </Typography>
                         </CardContent>
                     </Card>
                 </Grid>
             </Grid>
 
+            {/* Charts Section */}
             <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', height: 450 }}>
-                        <Typography variant="h6" gutterBottom>各类支出 (点击查看详情)</Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%' }}>
+                {/* Bar Chart */}
+                <Grid size={{ xs: 12, lg: 6 }}>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 3,
+                            borderRadius: 4,
+                            border: `1px solid ${colors.border.main}`,
+                            height: { xs: 400, md: 500 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            transition: 'box-shadow 200ms ease-in-out',
+                            '&:hover': {
+                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+                            }
+                        }}
+                    >
+                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                            各类支出对比
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+                            点击柱状图查看分类详情
+                        </Typography>
+                        <Box sx={{ flexGrow: 1, width: '100%', cursor: 'pointer' }}>
                             <BarChart
                                 dataset={stats.category_summary}
-                                xAxis={[{ scaleType: 'band', dataKey: 'Category' }]}
-                                series={[{ dataKey: 'Amount', label: '金额', color: theme.palette.primary.main }]}
+                                xAxis={[{
+                                    scaleType: 'band',
+                                    dataKey: 'Category',
+                                    tickLabelStyle: {
+                                        fontSize: 12,
+                                        fill: colors.text.secondary,
+                                    }
+                                }]}
+                                series={[{
+                                    dataKey: 'Amount',
+                                    label: '金额 (¥)',
+                                    color: colors.primary.main,
+                                }]}
                                 onItemClick={handleItemClick}
-                                slotProps={{
-                                    legend: { position: { vertical: 'bottom', horizontal: 'center' } }
-                                }}
-                                margin={{ left: 60, bottom: 50, right: 10, top: 20 }}
+                                margin={{ left: 80, bottom: 60, right: 20, top: 20 }}
                                 grid={{ horizontal: true }}
                             />
                         </Box>
                     </Paper>
                 </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                    <Paper elevation={3} sx={{ p: 3, display: 'flex', flexDirection: 'column', height: 450 }}>
-                        <Typography variant="h6" gutterBottom>各类支出占比 (点击查看详情)</Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center' }}>
+
+                {/* Pie Chart */}
+                <Grid size={{ xs: 12, lg: 6 }}>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 3,
+                            borderRadius: 4,
+                            border: `1px solid ${colors.border.main}`,
+                            height: { xs: 400, md: 500 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            transition: 'box-shadow 200ms ease-in-out',
+                            '&:hover': {
+                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+                            }
+                        }}
+                    >
+                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                            支出分布占比
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+                            点击饼图查看分类详情
+                        </Typography>
+                        <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
                             <PieChart
                                 series={[
                                     {
                                         data: pieChartData,
                                         highlightScope: { fade: 'global', highlight: 'item' },
                                         faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-                                        innerRadius: 30,
-                                        outerRadius: 120,
+                                        innerRadius: 40,
+                                        outerRadius: 140,
                                         paddingAngle: 2,
-                                        cornerRadius: 5,
+                                        cornerRadius: 6,
                                     },
                                 ]}
-                                slotProps={{
-                                    legend: {
-                                        position: { vertical: 'middle', horizontal: 'end' },
-                                    }
-                                }}
                                 onItemClick={handleItemClick}
                                 margin={{ right: 200 }}
                             />
@@ -154,44 +246,60 @@ export default function Dashboard() {
                 </Grid>
             </Grid>
 
-            {/* Drill Down Dialog */}
-            <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Box>
+            {/* Category Details Dialog */}
+            <Dialog
+                open={openDialog}
+                onClose={() => setOpenDialog(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{
+                    sx: { borderRadius: 3 }
+                }}
+            >
+                <DialogTitle sx={{ pb: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {selectedCategory} 支出明细
-                        <Typography variant="caption" display="block" color="textSecondary">
-                            共 {categoryTransactions.length} 笔交易
-                        </Typography>
-                    </Box>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                        共 {categoryTransactions.length} 笔交易
+                    </Typography>
                 </DialogTitle>
-                <DialogContent dividers>
+                <DialogContent dividers sx={{ p: 0 }}>
                     {loadingDetails ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
                             <CircularProgress />
                         </Box>
                     ) : (
-                        <TableContainer sx={{ maxHeight: 400 }}>
-                            <Table size="small" stickyHeader>
+                        <TableContainer>
+                            <Table size="small" sx={{ minWidth: 500 }}>
                                 <TableHead>
-                                    <TableRow>
-                                        <TableCell>日期</TableCell>
-                                        <TableCell>描述</TableCell>
-                                        <TableCell align="right">金额</TableCell>
+                                    <TableRow sx={{ backgroundColor: 'background.default' }}>
+                                        <TableCell sx={{ fontWeight: 600 }}>日期</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600 }}>金额</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
                                     {categoryTransactions.map((tx) => (
-                                        <TableRow key={tx.id}>
+                                        <TableRow
+                                            key={tx.id}
+                                            sx={{
+                                                '&:hover': { backgroundColor: 'action.hover' },
+                                                transition: 'background-color 150ms ease-in-out',
+                                            }}
+                                        >
                                             <TableCell>{new Date(tx.date).toLocaleDateString('zh-CN')}</TableCell>
                                             <TableCell>{tx.description}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                                            <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main' }}>
                                                 ¥{tx.amount.toFixed(2)}
                                             </TableCell>
                                         </TableRow>
                                     ))}
                                     {categoryTransactions.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={3} align="center">无数据</TableCell>
+                                            <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                                                无数据
+                                            </TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
@@ -199,8 +307,10 @@ export default function Dashboard() {
                         </TableContainer>
                     )}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setOpenDialog(false)}>关闭</Button>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setOpenDialog(false)} variant="outlined">
+                        关闭
+                    </Button>
                 </DialogActions>
             </Dialog>
         </Box>

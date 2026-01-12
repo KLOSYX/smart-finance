@@ -2,22 +2,29 @@ import React, { useEffect, useState } from 'react';
 import {
     Box, Button, Typography, Paper, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, CircularProgress, Alert,
-    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, Chip
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridRenderCellParams } from '@mui/x-data-grid';
 import type { SelectChangeEvent } from '@mui/material';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
+import { CloudUpload, FileDownload, Delete, Add, Receipt } from '@mui/icons-material';
 import { getTransactions, parsePdf, analyzeText, updateTransaction, clearAllTransactions, createTransaction } from '../api';
 import type { Transaction, TransactionCreate } from '../api';
+import { colors } from '../theme';
 
 const CATEGORIES = [
     "住房", "餐饮", "交通", "公用事业", "购物", "娱乐",
     "健康与健身", "旅行", "教育", "债务", "储蓄/投资", "需要复核", "其他"
 ];
+
+const CATEGORY_COLORS: Record<string, string> = {
+    "住房": colors.primary.main,
+    "餐饮": colors.cta.main,
+    "交通": colors.success.main,
+    "购物": '#8B5CF6',
+    "娱乐": '#EC4899',
+    "需要复核": '#F59E0B',
+};
 
 export default function Transactions() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -26,19 +33,13 @@ export default function Transactions() {
     const [analyzing, setAnalyzing] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Review Dialog State
+    // Dialog states
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewText, setReviewText] = useState('');
     const [currentFilename, setCurrentFilename] = useState('');
-
-    // Clear All Confirmation Dialog State
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
-
-    // Needs Review Dialog State
     const [needsReviewOpen, setNeedsReviewOpen] = useState(false);
     const [reviewTransactions, setReviewTransactions] = useState<Transaction[]>([]);
-
-    // Add Transaction Dialog State
     const [addDialogOpen, setAddDialogOpen] = useState(false);
     const [newTransaction, setNewTransaction] = useState<TransactionCreate>({
         date: new Date().toISOString().split('T')[0],
@@ -49,30 +50,30 @@ export default function Transactions() {
     });
 
     useEffect(() => {
-        loadTransactions();
+        const fetchTransactions = async () => {
+            setLoading(true);
+            try {
+                const data = await getTransactions();
+                setTransactions(data);
+            } catch (error) {
+                console.error(error);
+                setErrorMsg("无法加载交易记录，请检查后端服务。");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchTransactions();
     }, []);
-
-    const loadTransactions = async () => {
-        setLoading(true);
-        try {
-            const data = await getTransactions();
-            setTransactions(data);
-        } catch (error) {
-            console.error(error);
-            setErrorMsg("无法加载交易记录，请检查后端服务。");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleClearAll = async () => {
         try {
             await clearAllTransactions();
             setClearConfirmOpen(false);
-            await loadTransactions();
+            const data = await getTransactions();
+            setTransactions(data);
         } catch (error) {
             console.error(error);
-            alert("清除失败，请重试。");
+            setErrorMsg("清除失败，请重试。");
         }
     };
 
@@ -87,20 +88,12 @@ export default function Transactions() {
                 category: '其他',
                 source: 'manual'
             });
-            await loadTransactions();
+            const data = await getTransactions();
+            setTransactions(data);
         } catch (error) {
             console.error(error);
-            alert("添加失败，请检查输入。");
+            setErrorMsg("添加失败，请检查输入。");
         }
-    };
-
-    const handleNewTransactionChange = (prop: keyof TransactionCreate) => (event: React.ChangeEvent<HTMLInputElement>) => {
-        const rawValue = event.target.value;
-        let value: string | number = rawValue;
-        if (prop === 'amount') {
-            value = rawValue === '' ? 0 : parseFloat(rawValue);
-        }
-        setNewTransaction({ ...newTransaction, [prop]: value });
     };
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -108,11 +101,10 @@ export default function Transactions() {
             setUploading(true);
             setErrorMsg(null);
             try {
-                // Step 1: Parse and Anonymize
                 const result = await parsePdf(event.target.files[0]);
                 setReviewText(result.text);
                 setCurrentFilename(result.filename);
-                setReviewOpen(true); // Open Dialog
+                setReviewOpen(true);
             } catch (error) {
                 setErrorMsg("解析失败。请检查 API 配置或 PDF 格式。");
                 console.error(error);
@@ -126,12 +118,11 @@ export default function Transactions() {
     const handleConfirmAnalysis = async () => {
         setAnalyzing(true);
         try {
-            // Step 2: Analyze Edited Text
             const response = await analyzeText(reviewText, currentFilename);
             setReviewOpen(false);
-            await loadTransactions(); // Refresh list
+            const data = await getTransactions();
+            setTransactions(data);
 
-            // Check for transactions needing review
             if (response.transactions) {
                 const needingReview = response.transactions.filter(t => t.category === "需要复核");
                 if (needingReview.length > 0) {
@@ -141,7 +132,7 @@ export default function Transactions() {
             }
         } catch (error) {
             console.error(error);
-            alert("分析失败，请稍后重试。");
+            setErrorMsg("分析失败，请稍后重试。");
         } finally {
             setAnalyzing(false);
         }
@@ -149,57 +140,34 @@ export default function Transactions() {
 
     const handleCategoryChange = async (id: number, event: SelectChangeEvent) => {
         const newCategory = event.target.value;
-        // Optimistic update
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, category: newCategory } : t));
 
         try {
             await updateTransaction(id, { category: newCategory });
         } catch (error) {
             console.error("Failed to update category", error);
-            // Revert on error
-            alert("更新分类失败");
-            loadTransactions();
-        }
-    };
-
-    const handleReviewCategoryChange = async (id: number, event: SelectChangeEvent) => {
-        const newCategory = event.target.value;
-        // Update local state for review dialog
-        setReviewTransactions(prev => prev.map(t => t.id === id ? { ...t, category: newCategory } : t));
-        // Update main transactions list optimistically
-        setTransactions(prev => prev.map(t => t.id === id ? { ...t, category: newCategory } : t));
-
-        try {
-            await updateTransaction(id, { category: newCategory });
-        } catch (error) {
-            console.error("Failed to update category", error);
-            alert("更新分类失败");
+            setErrorMsg("更新分类失败");
+            const data = await getTransactions();
+            setTransactions(data);
         }
     };
 
     const exportCSV = () => {
         if (transactions.length === 0) return;
 
-        // Define CSV headers
         const headers = ["ID", "Date", "Description", "Amount", "Category", "Source"];
-
-        // Convert rows
         const csvRows = [
             headers.join(','),
             ...transactions.map(row => {
                 const date = new Date(row.date).toISOString().split('T')[0];
                 const desc = `"${row.description.replace(/"/g, '""')}"`;
-                const amount = row.amount;
-                const cat = row.category;
-                const src = row.source;
-                return [row.id, date, desc, amount, cat, src].join(',');
+                return [row.id, date, desc, row.amount, row.category, row.source].join(',');
             })
         ];
 
-        const csvContent = "data:text/csv;charset=utf-8,﻿" + csvRows.join('\n');
-        const encodedUri = encodeURI(csvContent);
+        const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + csvRows.join('\n');
         const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        link.setAttribute("href", encodeURI(csvContent));
         link.setAttribute("download", `transactions_${new Date().toISOString().split('T')[0]}.csv`);
         document.body.appendChild(link);
         link.click();
@@ -208,127 +176,145 @@ export default function Transactions() {
 
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>交易明细</Typography>
+            {/* Header */}
+            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Receipt sx={{ fontSize: 40, color: 'primary.main' }} />
+                <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif', flexGrow: 1 }}>
+                    交易明细
+                </Typography>
 
-                <Box sx={{ display: 'flex', gap: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
                     <Button
                         variant="contained"
-                        color="primary"
-                        startIcon={<AddIcon />}
+                        startIcon={<Add />}
                         onClick={() => setAddDialogOpen(true)}
+                        sx={{ cursor: 'pointer' }}
                     >
                         手动添加
                     </Button>
                     <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={() => setClearConfirmOpen(true)}
-                        disabled={transactions.length === 0 || loading}
+                        variant="contained"
+                        component="label"
+                        startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : <CloudUpload />}
+                        disabled={uploading}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        清空所有
+                        上传账单
+                        <input type="file" hidden accept=".pdf" onChange={handleFileUpload} />
                     </Button>
                     <Button
                         variant="outlined"
-                        startIcon={<FileDownloadIcon />}
+                        startIcon={<FileDownload />}
                         onClick={exportCSV}
                         disabled={transactions.length === 0}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        导出 CSV
+                        导出
                     </Button>
                     <Button
-                        component="label"
-                        variant="contained"
-                        startIcon={uploading ? <CircularProgress size={20} color="inherit"/> : <CloudUploadIcon />}
-                        disabled={uploading}
+                        variant="outlined"
+                        color="error"
+                        startIcon={<Delete />}
+                        onClick={() => setClearConfirmOpen(true)}
+                        disabled={transactions.length === 0 || loading}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        上传 PDF 账单
-                        <input
-                            type="file"
-                            hidden
-                            accept=".pdf"
-                            onChange={handleFileUpload}
-                        />
+                        清空
                     </Button>
                 </Box>
             </Box>
 
             {errorMsg && (
-                <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
+                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setErrorMsg(null)}>
                     {errorMsg}
                 </Alert>
             )}
 
-            <Paper elevation={3} sx={{ height: 600, width: '100%', mb: 3 }}>
+            {/* Data Grid */}
+            <Paper
+                elevation={0}
+                sx={{
+                    height: 650,
+                    width: '100%',
+                    border: `1px solid ${colors.border.main}`,
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                }}
+            >
                 <DataGrid
                     rows={transactions}
                     columns={[
                         {
                             field: 'date',
                             headerName: '日期',
-                            width: 150,
-                            valueGetter: (value, row) => new Date(row.date),
-                            valueFormatter: (value) => value ? value.toLocaleDateString('zh-CN') : ''
+                            width: 120,
+                            valueGetter: (_value, row) => new Date(row.date),
+                            valueFormatter: (value: Date) => value ? value.toLocaleDateString('zh-CN') : ''
                         },
-                        { field: 'description', headerName: '描述', flex: 1, minWidth: 200 },
+                        {
+                            field: 'description',
+                            headerName: '描述',
+                            width: 350,
+                            minWidth: 200,
+                        },
                         {
                             field: 'category',
                             headerName: '类别',
-                            width: 180,
+                            width: 140,
                             renderCell: (params: GridRenderCellParams) => (
-                                <Select
-                                    value={params.value}
-                                    onChange={(e) => handleCategoryChange(params.row.id, e as SelectChangeEvent)}
+                                <Chip
+                                    label={params.value}
                                     size="small"
-                                    variant="standard"
-                                    disableUnderline
-                                    fullWidth
                                     sx={{
-                                        '& .MuiSelect-select': { py: 0.5, px: 1, borderRadius: 1, bgcolor: params.value === '需要复核' ? '#fff3e0' : 'transparent' }
+                                        backgroundColor: CATEGORY_COLORS[params.value] || colors.border.main,
+                                        color: 'white',
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
                                     }}
-                                >
-                                    {CATEGORIES.map(cat => (
-                                        <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-                                    ))}
-                                </Select>
+                                    onClick={() => {
+                                        const newCategoryIndex = (CATEGORIES.indexOf(params.value) + 1) % CATEGORIES.length;
+                                        handleCategoryChange(params.row.id, { target: { value: CATEGORIES[newCategoryIndex] } } as SelectChangeEvent);
+                                    }}
+                                />
                             )
                         },
                         {
                             field: 'amount',
                             headerName: '金额 (¥)',
-                            width: 120,
+                            width: 130,
                             align: 'right',
                             headerAlign: 'right',
                             renderCell: (params: GridRenderCellParams) => (
-                                <span style={{ color: params.value > 0 ? '#d32f2f' : '#2e7d32', fontWeight: 'bold' }}>
+                                <Typography sx={{ color: params.value > 0 ? 'error.main' : 'success.main', fontWeight: 600 }}>
                                     {Number(params.value).toFixed(2)}
-                                </span>
+                                </Typography>
                             )
                         },
-                        { field: 'source', headerName: '来源', width: 150 },
+                        { field: 'source', headerName: '来源', width: 110 },
                     ]}
                     loading={loading}
                     initialState={{
-                        pagination: {
-                            paginationModel: { page: 0, pageSize: 10 },
-                        },
-                        sorting: {
-                            sortModel: [{ field: 'date', sort: 'desc' }],
-                        },
+                        pagination: { paginationModel: { page: 0, pageSize: 10 } },
+                        sorting: { sortModel: [{ field: 'date', sort: 'desc' }] },
                     }}
-                    pageSizeOptions={[10, 25, 50, 100]}
+                    pageSizeOptions={[10, 25, 50]}
                     disableRowSelectionOnClick
-                    sx={{ border: 0 }}
+                    sx={{
+                        border: 0,
+                        '& .MuiDataGrid-cell:focus': { outline: 'none' },
+                        '& .MuiDataGrid-row:hover': { backgroundColor: 'action.hover' },
+                    }}
                 />
             </Paper>
 
             {/* Review Dialog */}
-            <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} maxWidth="md" fullWidth>
-                <DialogTitle>🛡️ 隐私审查</DialogTitle>
+            <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle sx={{ pb: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>隐私审查</Typography>
+                </DialogTitle>
                 <DialogContent>
-                    <Alert severity="info" sx={{ mb: 2 }}>
-                        请检查下方提取的文本，确保所有敏感信息（如姓名、卡号、电话）已被移除或脱敏。
+                    <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+                        请检查下方提取的文本，确保所有敏感信息已被移除或脱敏。
                     </Alert>
                     <TextField
                         multiline
@@ -337,81 +323,72 @@ export default function Transactions() {
                         variant="outlined"
                         value={reviewText}
                         onChange={(e) => setReviewText(e.target.value)}
-                        sx={{ fontFamily: 'monospace' }}
+                        sx={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
                     />
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setReviewOpen(false)} color="inherit">
-                        取消
-                    </Button>
+                    <Button onClick={() => setReviewOpen(false)} variant="outlined">取消</Button>
                     <Button
                         onClick={handleConfirmAnalysis}
                         variant="contained"
                         disabled={analyzing}
                         startIcon={analyzing && <CircularProgress size={20} color="inherit" />}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        确认并开始分析
+                        确认并分析
                     </Button>
                 </DialogActions>
             </Dialog>
 
-            {/* Clear All Confirmation Dialog */}
-            <Dialog open={clearConfirmOpen} onClose={() => setClearConfirmOpen(false)}>
-                <DialogTitle>⚠️ 确认清空</DialogTitle>
+            {/* Clear Confirmation */}
+            <Dialog open={clearConfirmOpen} onClose={() => setClearConfirmOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle>确认清空</DialogTitle>
                 <DialogContent>
                     <Typography>您确定要清空所有交易记录吗？此操作不可撤销。</Typography>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setClearConfirmOpen(false)} color="inherit">
-                        取消
-                    </Button>
-                    <Button
-                        onClick={handleClearAll}
-                        variant="contained"
-                        color="error"
-                    >
-                        确认清空
-                    </Button>
+                    <Button onClick={() => setClearConfirmOpen(false)} variant="outlined">取消</Button>
+                    <Button onClick={handleClearAll} variant="contained" color="error" sx={{ cursor: 'pointer' }}>确认</Button>
                 </DialogActions>
             </Dialog>
 
             {/* Needs Review Dialog */}
-            <Dialog open={needsReviewOpen} onClose={() => setNeedsReviewOpen(false)} maxWidth="lg" fullWidth>
-                <DialogTitle>🔍 交易复核</DialogTitle>
+            <Dialog open={needsReviewOpen} onClose={() => setNeedsReviewOpen(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle>交易复核</DialogTitle>
                 <DialogContent>
-                    <Alert severity="warning" sx={{ mb: 2 }}>
-                        以下交易被标记为“需要复核”，请检查并更新其类别。
+                    <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+                        以下交易被标记为"需要复核"，请检查并点击分类标签更新。
                     </Alert>
-                    <TableContainer component={Paper} elevation={0} variant="outlined">
+                    <TableContainer>
                         <Table>
-                            <TableHead sx={{ bgcolor: '#fff3e0' }}>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>日期</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>描述</TableCell>
-                                    <TableCell sx={{ fontWeight: 'bold' }}>类别</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 'bold' }}>金额</TableCell>
+                            <TableHead>
+                                <TableRow sx={{ backgroundColor: 'background.default' }}>
+                                    <TableCell sx={{ fontWeight: 600 }}>日期</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>类别</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>金额</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {reviewTransactions.map((row) => (
-                                    <TableRow key={row.id}>
+                                    <TableRow key={row.id} sx={{ '&:hover': { backgroundColor: 'action.hover' } }}>
                                         <TableCell>{new Date(row.date).toLocaleDateString('zh-CN')}</TableCell>
                                         <TableCell>{row.description}</TableCell>
                                         <TableCell>
                                             <Select
                                                 value={row.category}
-                                                onChange={(e) => handleReviewCategoryChange(row.id, e)}
+                                                onChange={(e) => {
+                                                    handleCategoryChange(row.id, e);
+                                                    setReviewTransactions(prev => prev.map(t => t.id === row.id ? { ...t, category: e.target.value } : t));
+                                                }}
                                                 size="small"
-                                                fullWidth
                                                 sx={{ minWidth: 120 }}
                                             >
-                                                {CATEGORIES.map(cat => (
-                                                    <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-                                                ))}
+                                                {CATEGORIES.map(cat => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
                                             </Select>
                                         </TableCell>
-                                        <TableCell align="right">
-                                            {row.amount.toFixed(2)}
+                                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                            ¥{row.amount.toFixed(2)}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -420,61 +397,54 @@ export default function Transactions() {
                     </TableContainer>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setNeedsReviewOpen(false)} variant="contained">
-                        完成
-                    </Button>
+                    <Button onClick={() => setNeedsReviewOpen(false)} variant="contained" sx={{ cursor: 'pointer' }}>完成</Button>
                 </DialogActions>
             </Dialog>
 
             {/* Add Transaction Dialog */}
-            <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>➕ 添加交易</DialogTitle>
+            <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle>添加交易</DialogTitle>
                 <DialogContent>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
                         <TextField
                             label="日期"
                             type="date"
                             fullWidth
                             InputLabelProps={{ shrink: true }}
                             value={newTransaction.date}
-                            onChange={handleNewTransactionChange('date')}
+                            onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
                         />
                         <TextField
                             label="描述"
                             fullWidth
                             value={newTransaction.description}
-                            onChange={handleNewTransactionChange('description')}
+                            onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
                         />
                         <TextField
                             label="金额 (¥)"
                             type="number"
                             fullWidth
                             value={newTransaction.amount}
-                            onChange={handleNewTransactionChange('amount')}
+                            onChange={(e) => setNewTransaction({ ...newTransaction, amount: parseFloat(e.target.value) || 0 })}
                         />
                         <TextField
                             select
                             label="类别"
                             fullWidth
                             value={newTransaction.category}
-                            onChange={handleNewTransactionChange('category')}
+                            onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
                         >
-                            {CATEGORIES.map((option) => (
-                                <MenuItem key={option} value={option}>
-                                    {option}
-                                </MenuItem>
-                            ))}
+                            {CATEGORIES.map((cat) => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
                         </TextField>
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setAddDialogOpen(false)} color="inherit">
-                        取消
-                    </Button>
+                    <Button onClick={() => setAddDialogOpen(false)} variant="outlined">取消</Button>
                     <Button
                         onClick={handleAddTransaction}
                         variant="contained"
                         disabled={!newTransaction.description || !newTransaction.amount}
+                        sx={{ cursor: 'pointer' }}
                     >
                         添加
                     </Button>

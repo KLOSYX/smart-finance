@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Button, Typography, Paper } from '@mui/material';
-import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
-import DeleteIcon from '@mui/icons-material/Delete';
+import { AutoAwesome, Delete, SmartToy } from '@mui/icons-material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
@@ -10,11 +9,8 @@ import {
     Avatar as ChatAvatar
 } from '@chatscope/chat-ui-kit-react';
 import { sendChatMessage } from '../api';
-
-interface ChatMessage {
-    role: 'user' | 'assistant';
-    content: string;
-}
+import { colors } from '../theme';
+import type { ChatMessage } from '../api';
 
 export default function Chat() {
     const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -23,7 +19,6 @@ export default function Chat() {
     });
     const [loading, setLoading] = useState(false);
 
-    // Save to local storage
     useEffect(() => {
         localStorage.setItem('chat_history', JSON.stringify(messages));
     }, [messages]);
@@ -45,12 +40,11 @@ export default function Chat() {
         try {
             const history = messages.slice(-10);
             const data = await sendChatMessage(text, history);
-
             const aiMsg: ChatMessage = { role: 'assistant', content: data.response };
             setMessages(prev => [...prev, aiMsg]);
         } catch (error) {
             console.error(error);
-            const errorMsg: ChatMessage = { role: 'assistant', content: "抱歉，我在处理您的请求时遇到了错误。" };
+            const errorMsg: ChatMessage = { role: 'assistant', content: "抱歉，我在处理您的请求时遇到了错误。请检查API配置。" };
             setMessages(prev => [...prev, errorMsg]);
         } finally {
             setLoading(false);
@@ -63,60 +57,56 @@ export default function Chat() {
 
     return (
         <Box sx={{ height: '80vh', display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>AI 财务顾问</Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
+            {/* Header */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <SmartToy sx={{ fontSize: 40, color: 'primary.main' }} />
+                    <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
+                        AI 财务顾问
+                    </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
                     <Button
-                        variant="outlined"
-                        color="error"
-                        startIcon={<DeleteIcon />}
-                        onClick={handleClear}
-                        disabled={messages.length === 0}
+                        variant="contained"
+                        startIcon={<AutoAwesome />}
+                        onClick={generateAdvice}
+                        disabled={loading}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        清空记录
+                        生成分析报告
                     </Button>
                     <Button
                         variant="outlined"
-                        startIcon={<AutoAwesomeIcon />}
-                        onClick={generateAdvice}
-                        disabled={loading}
+                        color="error"
+                        startIcon={<Delete />}
+                        onClick={handleClear}
+                        disabled={messages.length === 0}
+                        sx={{ cursor: 'pointer' }}
                     >
-                        生成财务分析报告
+                        清空记录
                     </Button>
                 </Box>
             </Box>
 
+            {/* Chat Container */}
             <Box
                 sx={{
                     flexGrow: 1,
                     overflow: 'hidden',
-                    bgcolor: '#f4f7f9',
+                    bgcolor: colors.background.default,
                     position: 'relative',
-                    borderRadius: '24px',
-                    border: '1px solid #e5e7eb',
-                    '& .cs-main-container': {
-                        border: 'none',
-                        bgcolor: 'transparent',
-                    },
-                    '& .cs-chat-container': {
-                        bgcolor: 'transparent',
-                    },
-                    '& .cs-message-list': {
-                        bgcolor: 'transparent',
-                        paddingBottom: '100px',
-                        paddingTop: '20px',
-                    },
-                    '& .cs-message--incoming .cs-message__content': {
-                        backgroundColor: 'transparent',
-                        boxShadow: 'none',
-                        padding: 0,
-                    },
+                    borderRadius: 4,
+                    border: `1px solid ${colors.border.main}`,
+                    '& .cs-main-container': { border: 'none', bgcolor: 'transparent' },
+                    '& .cs-chat-container': { bgcolor: 'transparent' },
+                    '& .cs-message-list': { bgcolor: 'transparent', paddingBottom: '100px', paddingTop: '20px' },
+                    '& .cs-message--incoming .cs-message__content': { backgroundColor: 'transparent', boxShadow: 'none', padding: 0 },
                     '& .cs-message--outgoing .cs-message__content': {
-                        backgroundColor: '#6366f1', // Indigo color
+                        backgroundColor: colors.primary.main,
                         color: 'white',
                         borderRadius: '18px 18px 4px 18px',
                         padding: '10px 16px',
-                        boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
+                        boxShadow: `0 4px 12px rgba(59, 130, 246, 0.2)`,
                     },
                     '& .cs-message-input': {
                         position: 'absolute',
@@ -126,24 +116,15 @@ export default function Chat() {
                         width: '90%',
                         maxWidth: '800px',
                         backgroundColor: '#ffffff !important',
-                        border: '1px solid #e5e7eb',
+                        border: `1px solid ${colors.border.main}`,
                         borderRadius: '16px',
                         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
                         padding: '4px 8px',
                         zIndex: 10,
                     },
-                    '& .cs-message-input__content-editor-wrapper': {
-                        backgroundColor: 'transparent !important',
-                        border: 'none !important',
-                    },
-                    '& .cs-message-input__content-editor': {
-                        fontSize: '15px',
-                        color: '#1f2937',
-                        backgroundColor: 'transparent !important',
-                    },
-                    '& .cs-button--send': {
-                        color: '#6366f1 !important',
-                    }
+                    '& .cs-message-input__content-editor-wrapper': { backgroundColor: 'transparent !important', border: 'none !important' },
+                    '& .cs-message-input__content-editor': { fontSize: '15px', color: colors.text.primary, backgroundColor: 'transparent !important' },
+                    '& .cs-button--send': { color: `${colors.primary.main} !important` },
                 }}
             >
                 <MainContainer>
@@ -162,34 +143,30 @@ export default function Chat() {
                                 >
                                     {msg.role === 'assistant' ? (
                                         <Message.CustomContent>
-                                            <Paper elevation={0} sx={{
-                                                p: 2,
-                                                borderRadius: '20px',
-                                                bgcolor: '#ffffff',
-                                                border: '1px solid #e5e7eb',
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                maxWidth: '95%',
-                                                // Ultra-tight Markdown styling
-                                                '& *': { margin: 0, padding: 0 },
-                                                '& p': { mb: '0.3em', lineHeight: 1.4 },
-                                                '& p:last-child': { mb: 0 },
-                                                '& h1, & h2, & h3': { color: '#111827', mt: '0.6em', mb: '0.3em', fontWeight: 600, lineHeight: 1.3 },
-                                                '& h1': { fontSize: '1.15em' },
-                                                '& h2': { fontSize: '1.1em' },
-                                                '& h3': { fontSize: '1.05em' },
-                                                '& ul, & ol': { pl: '1.2em', mb: '0.3em', listStyle: 'outside' },
-                                                '& li': { mb: '0.15em', lineHeight: 1.4 },
-                                                '& strong': { color: '#111827', fontWeight: 600 },
-                                                '& blockquote': { pl: 1.5, borderLeft: '3px solid #e5e7eb', color: '#6b7280', fontStyle: 'italic', my: '0.3em' },
-                                                '& code': { px: 0.5, py: 0.2, bgcolor: '#f3f4f6', borderRadius: '3px', fontSize: '0.9em' }
-                                            }}>
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm]}
-                                                    components={{
-                                                        p: ({ children }) => <span style={{ display: 'inline' }}>{children}</span>,
-                                                        li: ({ children, ...props }) => <li {...props} style={{ display: 'list-item' }}><span style={{ display: 'inline' }}>{children}</span></li>
-                                                    }}
-                                                >
+                                            <Paper
+                                                elevation={0}
+                                                sx={{
+                                                    p: 2.5,
+                                                    borderRadius: 4,
+                                                    bgcolor: '#ffffff',
+                                                    border: `1px solid ${colors.border.main}`,
+                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                                    maxWidth: '95%',
+                                                    '& p': { mb: 1, lineHeight: 1.6, '&:last-child': { mb: 0 } },
+                                                    '& h1, & h2, & h3': { color: colors.text.primary, mt: 1.5, mb: 0.75, fontWeight: 600, lineHeight: 1.3 },
+                                                    '& h1': { fontSize: '1.25em' },
+                                                    '& h2': { fontSize: '1.15em' },
+                                                    '& h3': { fontSize: '1.1em' },
+                                                    '& ul, & ol': { pl: 2, mb: 1, listStyle: 'outside' },
+                                                    '& li': { mb: 0.5, lineHeight: 1.6 },
+                                                    '& strong': { color: colors.text.primary, fontWeight: 600 },
+                                                    '& code': { px: 0.75, py: 0.25, bgcolor: colors.background.default, borderRadius: '4px', fontSize: '0.9em', color: colors.error.main },
+                                                    '& table': { width: '100%', borderCollapse: 'collapse', my: 1 },
+                                                    '& th, & td': { border: `1px solid ${colors.border.main}`, p: 1, textAlign: 'left' },
+                                                    '& th': { bgcolor: colors.background.default, fontWeight: 600 },
+                                                }}
+                                            >
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                                     {msg.content}
                                                 </ReactMarkdown>
                                             </Paper>
@@ -197,29 +174,34 @@ export default function Chat() {
                                     ) : null}
                                     <ChatAvatar
                                         src={msg.role === 'assistant'
-                                            ? "https://ui-avatars.com/api/?name=AI&background=f3f4f6&color=4b5563&length=2&rounded=true&bold=true&size=48"
-                                            : "https://ui-avatars.com/api/?name=Me&background=6366f1&color=fff&length=2&rounded=true&bold=true&size=48"
+                                            ? "https://ui-avatars.com/api/?name=AI&background=3B82F6&color=fff&length=2&rounded=true&bold=true&size=48"
+                                            : "https://ui-avatars.com/api/?name=Me&background=F97316&color=fff&length=2&rounded=true&bold=true&size=48"
                                         }
                                         name={msg.role === 'assistant' ? "AI Assistant" : "Me"}
                                     />
                                 </Message>
                             ))}
                             {loading && (
-                                <Message model={{
-                                    direction: "incoming",
-                                    position: "single",
-                                    sender: "AI"
-                                }}>
+                                <Message
+                                    model={{
+                                        direction: "incoming",
+                                        position: "single",
+                                        sender: "AI"
+                                    }}
+                                >
                                     <Message.CustomContent>
-                                        <Paper elevation={0} sx={{
-                                            p: 2,
-                                            borderRadius: '20px',
-                                            bgcolor: '#ffffff',
-                                            border: '1px solid #e5e7eb',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: 1
-                                        }}>
+                                        <Paper
+                                            elevation={0}
+                                            sx={{
+                                                p: 2,
+                                                borderRadius: 4,
+                                                bgcolor: '#ffffff',
+                                                border: `1px solid ${colors.border.main}`,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: 1
+                                            }}
+                                        >
                                             <Typography variant="body2" color="text.secondary">AI 正在思考...</Typography>
                                             <div className="typing-dots">
                                                 <span></span>
@@ -229,7 +211,7 @@ export default function Chat() {
                                         </Paper>
                                     </Message.CustomContent>
                                     <ChatAvatar
-                                        src="https://ui-avatars.com/api/?name=AI&background=f3f4f6&color=4b5563&length=2&rounded=true&bold=true&size=48"
+                                        src="https://ui-avatars.com/api/?name=AI&background=3B82F6&color=fff&length=2&rounded=true&bold=true&size=48"
                                         name="AI Assistant"
                                     />
                                 </Message>
