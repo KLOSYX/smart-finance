@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "@ant-design/pro-chat": "^1.15.3",
     "@chatscope/chat-ui-kit-react": "^2.1.1",
     "@chatscope/chat-ui-kit-styles": "^1.4.0",
     "@emotion/react": "^11.14.0",
@@ -19,6 +21,8 @@
     "@mui/x-charts": "^8.23.0",
     "@mui/x-data-grid": "^8.23.0",
     "@zhama/a2ui": "^0.12.0",
+    "antd": "^6.2.0",
+    "antd-style": "^4.1.0",
     "axios": "^1.13.2",
     "date-fns": "^4.1.0",
     "react": "^19.2.0",
@@ -26,7 +30,8 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.11.0",
     "recharts": "^3.6.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "styled-components": "^6.3.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
