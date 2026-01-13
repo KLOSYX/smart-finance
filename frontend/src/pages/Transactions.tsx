@@ -11,6 +11,7 @@ import { CloudUpload, FileDownload, Delete, Add, Receipt } from '@mui/icons-mate
 import { getTransactions, parsePdf, analyzeText, updateTransaction, clearAllTransactions, createTransaction } from '../api';
 import type { Transaction, TransactionCreate } from '../api';
 import { colors } from '../theme';
+import { isAxiosError } from 'axios';
 
 const CATEGORIES = [
     "住房", "餐饮", "交通", "公用事业", "购物", "娱乐",
@@ -132,7 +133,13 @@ export default function Transactions() {
             }
         } catch (error) {
             console.error(error);
-            setErrorMsg("分析失败，请稍后重试。");
+            let detail = "分析失败，请稍后重试。";
+            if (isAxiosError(error) && error.response?.data?.detail) {
+                detail = error.response.data.detail;
+            } else if (error instanceof Error) {
+                detail = error.message;
+            }
+            setErrorMsg(detail);
         } finally {
             setAnalyzing(false);
         }
@@ -155,13 +162,13 @@ export default function Transactions() {
     const exportCSV = () => {
         if (transactions.length === 0) return;
 
-        const headers = ["ID", "Date", "Description", "Amount", "Category", "Source"];
+        const headers = ["ID", "Date", "Description", "Amount", "Category", "Card Last 4", "Source"];
         const csvRows = [
             headers.join(','),
             ...transactions.map(row => {
                 const date = new Date(row.date).toISOString().split('T')[0];
                 const desc = `"${row.description.replace(/"/g, '""')}"`;
-                return [row.id, date, desc, row.amount, row.category, row.source].join(',');
+                return [row.id, date, desc, row.amount, row.category, row.card_last_four || '', row.source].join(',');
             })
         ];
 
@@ -256,6 +263,12 @@ export default function Transactions() {
                             headerName: '描述',
                             flex: 1,
                             minWidth: 200,
+                        },
+                        {
+                            field: 'card_last_four',
+                            headerName: '卡号',
+                            width: 100,
+                            valueFormatter: (value: string) => value ? `****${value}` : '-'
                         },
                         {
                             field: 'category',

@@ -5,6 +5,7 @@ import { ProChat } from '@ant-design/pro-chat';
 import { useTheme } from '@mui/material/styles';
 import { sendChatMessage } from '../api';
 import type { ProChatInstance } from '@ant-design/pro-chat';
+import { isAxiosError } from 'axios';
 
 export default function Chat() {
     const theme = useTheme();
@@ -16,7 +17,6 @@ export default function Chat() {
         if (window.confirm("确定要清空所有对话历史吗？")) {
             localStorage.removeItem('pro_chat_history');
             setChatKey(prev => prev + 1);
-            // Optionally clear text input if needed, but ProChat might better handle it on remount
         }
     };
 
@@ -125,7 +125,11 @@ export default function Chat() {
                             return new Response(data.response);
                         } catch (error) {
                             console.error(error);
-                            return new Response("抱歉，遇到了一些连接问题，请稍后重试。");
+                            let detail = "抱歉，遇到了一些连接问题，请稍后重试。";
+                            if (isAxiosError(error) && error.response?.data?.detail) {
+                                detail = error.response.data.detail;
+                            }
+                            return new Response(detail);
                         }
                     }}
                     // Custom user/assistant metadata
