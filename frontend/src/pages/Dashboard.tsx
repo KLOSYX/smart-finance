@@ -19,9 +19,17 @@ interface CategorySummary {
     [key: string]: string | number;
 }
 
+
+interface CardSummary {
+    CardLastFour: string;
+    Amount: number;
+    [key: string]: string | number;
+}
+
 interface Stats {
     total_expense: number;
     category_summary: CategorySummary[];
+    card_summary: CardSummary[];
 }
 
 // Trust Blue color palette for charts
@@ -241,6 +249,59 @@ export default function Dashboard() {
                                 onItemClick={handleItemClick}
                                 margin={{ right: 200 }}
                             />
+                        </Box>
+                    </Paper>
+                </Grid>
+
+                {/* Card Usage Chart */}
+                <Grid size={{ xs: 12, lg: 6 }}>
+                    <Paper
+                        elevation={0}
+                        sx={{
+                            p: 3,
+                            borderRadius: 4,
+                            border: `1px solid ${colors.border.main}`,
+                            height: { xs: 400, md: 500 },
+                            display: 'flex',
+                            flexDirection: 'column',
+                            transition: 'box-shadow 200ms ease-in-out',
+                            '&:hover': {
+                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
+                            }
+                        }}
+                    >
+                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
+                            信用卡支出分布
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
+                            不同信用卡的支出比例
+                        </Typography>
+                        <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
+                            {stats.card_summary && stats.card_summary.length > 0 ? (
+                                <PieChart
+                                    series={[
+                                        {
+                                            data: stats.card_summary.map((item: CardSummary, index: number) => ({
+                                                id: index,
+                                                value: item.Amount,
+                                                label: `尾号 ${item.CardLastFour || '未知'}`,
+                                                color: CHART_COLORS[(index + 3) % CHART_COLORS.length]
+                                            })),
+                                            highlightScope: { fade: 'global', highlight: 'item' },
+                                            faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
+                                            innerRadius: 40,
+                                            outerRadius: 140,
+                                            paddingAngle: 2,
+                                            cornerRadius: 6,
+                                        },
+                                    ]}
+                                    margin={{ right: 200 }}
+                                />
+                            ) : (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                    <Typography color="text.secondary">暂无卡号数据</Typography>
+                                </Box>
+                            )}
                         </Box>
                     </Paper>
                 </Grid>

@@ -126,6 +126,7 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
             - "Category": 从提供的类别中选择一个。
               - 如果描述模糊不清或你不确定类别，请务必使用 "需要复核"。
               - 只有当你确定它不属于上述任何主要类别时，才使用 "其他"。
+            - "CardLastFour": 交易卡号后四位。如果未找到，返回 null。例如："8888"。
 
             只返回JSON数据，不要有任何Markdown格式或解释。
             例如：[
@@ -133,7 +134,8 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
                     "Date": "2023-01-01",
                     "Description": "超市",
                     "Amount": 50.00,
-                    "Category": "购物"
+                    "Category": "购物",
+                    "CardLastFour": "1234"
                 }}
             ]
             如果未找到交易，返回 []。

@@ -9,6 +9,7 @@ class TransactionBase(BaseModel):
     amount: float
     category: str
     source: str = "manual"
+    card_last_four: Optional[str] = None
 
 
 class TransactionCreate(TransactionBase):
@@ -21,6 +22,7 @@ class TransactionUpdate(BaseModel):
     amount: Optional[float] = None
     category: Optional[str] = None
     source: Optional[str] = None
+    card_last_four: Optional[str] = None
 
 
 class Transaction(TransactionBase):

@@ -15,6 +15,7 @@ export interface Transaction {
   amount: number;
   category: string;
   source: string;
+  card_last_four?: string;
 }
 
 export type TransactionCreate = Omit<Transaction, 'id'>;

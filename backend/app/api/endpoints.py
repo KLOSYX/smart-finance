@@ -160,6 +160,7 @@ async def analyze_text(request: TextAnalysisRequest, db: Session = Depends(get_d
             amount=float(item.get("Amount", 0)),
             category=item.get("Category", "Other"),
             source=request.source_filename,
+            card_last_four=item.get("CardLastFour"),
         )
         db.add(trans)
         added_transactions.append(trans)
@@ -253,7 +254,10 @@ def get_stats(db: Session = Depends(get_db)):
     if not transactions:
         return {"total_expense": 0, "category_summary": []}
 
-    data = [{"Amount": t.amount, "Category": t.category} for t in transactions]
+    data = [
+        {"Amount": t.amount, "Category": t.category, "CardLastFour": t.card_last_four}
+        for t in transactions
+    ]
     df = pd.DataFrame(data)
 
     # Simple aggregation
@@ -268,4 +272,17 @@ def get_stats(db: Session = Depends(get_db)):
         .to_dict(orient="records")
     )
 
-    return {"total_expense": total, "category_summary": cat_summary}
+    # Card Summary
+    expenses["CardLastFour"] = expenses["CardLastFour"].fillna("Unknown")
+    card_summary = (
+        expenses.groupby("CardLastFour")["Amount"]
+        .sum()
+        .reset_index()
+        .to_dict(orient="records")
+    )
+
+    return {
+        "total_expense": total,
+        "category_summary": cat_summary,
+        "card_summary": card_summary,
+    }

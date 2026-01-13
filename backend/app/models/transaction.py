@@ -14,6 +14,7 @@ class Transaction(Base):
     amount = Column(Float)
     category = Column(String, index=True)
     source = Column(String)  # e.g. "manual", "statement_jan.pdf"
+    card_last_four = Column(String, nullable=True)
 
     # Optional: Original raw text or metadata
     raw_text = Column(String, nullable=True)
