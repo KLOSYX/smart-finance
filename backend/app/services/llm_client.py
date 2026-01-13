@@ -72,7 +72,7 @@ def _get_agent_base_prompt(df_summary):
     """
     return f"""
 你是一位高级财务数据分析师。请用中文回答。
-所有货币单位均为人民币 (¥)。
+所有货币单位均为人民币 (¥)。正数表示支出，负数表示退款。
 
 编写/修改 pandas 代码时请使用 .loc 避免链式赋值警告；如需对切片修改，请先 copy()。
 在编写任何 pandas 代码前请确保先执行 `import pandas as pd`。
@@ -122,7 +122,7 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
             严格以JSON对象列表的形式返回输出。每个对象必须包含以下键：
             - "Date": 交易日期 (格式 YYYY-MM-DD)。如果年份缺失，假设为 {current_year}。
             - "Description": 商户名称或交易描述。
-            - "Amount": 交易的数值 (正数表示支出，负数表示退款/支付)。
+            - "Amount": 交易的数值 (正数表示支出，负数表示退款，忽略信用卡还款)。
             - "Category": 从提供的类别中选择一个。
               - 如果描述模糊不清或你不确定类别，请务必使用 "需要复核"。
               - 只有当你确定它不属于上述任何主要类别时，才使用 "其他"。
@@ -335,7 +335,7 @@ def chat_with_data(
 1. 如果问题是闲聊，请礼貌地回答。
 2. 如果需要数据，请分析 DataFrame `df` 并结合财务背景给出分析结论。
 3. 如果需要进行计算，请调用 pandas 工具。
-4. 请用中文 (Chinese) 回答。
+4. 请用中文回答。
 """
 
     return run_autonomous_agent(df, full_prompt, api_key, base_url, model, max_turns=20)
