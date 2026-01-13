@@ -72,6 +72,22 @@ export default function Chat() {
                     '& .ant-pro-chat-list': {
                         paddingBottom: '20px',
                     },
+                    // Customize Message Bubbles
+                    '& .ant-pro-chat-list-item-message-content': {
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                    },
+                    // User Message (Right)
+                    '& .ant-pro-chat-list-item-right .ant-pro-chat-list-item-message-content': {
+                        backgroundColor: '#E3F2FD', // Light Blue
+                        borderBottomRightRadius: '4px',
+                    },
+                    // AI Message (Left)
+                    '& .ant-pro-chat-list-item-left .ant-pro-chat-list-item-message-content': {
+                        backgroundColor: '#F8FAFC', // Very Light Gray
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderBottomLeftRadius: '4px',
+                    },
                 }}
             >
                 <ProChat
