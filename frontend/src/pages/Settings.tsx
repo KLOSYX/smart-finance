@@ -40,7 +40,14 @@ export default function SettingsPage() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            await updateSettings(settings);
+            // Convert empty strings to null for numeric fields to satisfy Pydantic schema
+            const payload = {
+                ...settings,
+                monthly_income: settings.monthly_income === '' ? null : Number(settings.monthly_income),
+                investments: settings.investments === '' ? null : Number(settings.investments)
+            };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await updateSettings(payload as any);
             setMsg({ type: 'success', text: '配置已保存！' });
         } catch (error) {
             console.error(error);
