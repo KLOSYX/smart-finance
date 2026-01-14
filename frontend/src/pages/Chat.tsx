@@ -221,6 +221,14 @@ export default function Chat() {
                         backgroundColor: '#3B82F6',
                     }}
                     locale="zh-CN"
+                    actions={{
+                        render: () => [],
+                        flexConfig: {
+                            gap: 24,
+                            direction: 'horizontal',
+                            justify: 'end',
+                        },
+                    }}
                 />
             </Box>
         </Box>
