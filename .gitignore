@@ -39,7 +39,7 @@ pnpm-debug.log*
 *.db
 *.sqlite3
 backend/sql_app.db
-config.json
+
 
 # Agent / Environment
 .agent/
