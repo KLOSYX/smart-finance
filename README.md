@@ -1,18 +1,31 @@
-# Smart Finance (AI 智能理财助手)
+# Smart Finance
 
-Smart Finance is an intelligent personal finance assistant that combines a React frontend with a FastAPI backend to help you manage your finances, analyze expenses, and provide investment advice using AI.
+Smart Finance is an intelligent personal finance system designed to automate the tedious process of expense tracking. By leveraging advanced **Large Language Models (LLMs)**, it transforms raw credit card statements into actionable financial insights.
 
-## Features
+## Core Features
 
-- **AI Advisor**: Chat with an AI to analyze your spending habits and get financial advice.
-- **Dashboard**: Visual overview of your financial health.
-- **Transaction Management**: Record and categorize your income and expenses.
-- **Portfolios**: Manage and track your investment portfolios.
+### 1. 💳 Intelligent Credit Card Bill Analysis
+Stop entering data manually. Smart Finance allows you to:
+- **Parse PDF Statements**: Upload your credit card bills (PDF) directly.
+- **Privacy-First Extraction**: Automatically extracts transaction details while anonymizing sensitive text *before* sending data for analysis.
+- **AI Classification**: Uses high-intelligence models (like Qwen-Max/Gemini) to accurately categorize messy merchant names into clean categories (e.g., "Dining", "Transport", "Shopping").
 
-## Project Structure
+### 2. 🤖 AI Agent Expenditure Analysis
+Beyond simple charts, our AI Agent acts as your personal CFO:
+- **Interactive Analysis**: Chat with your financial data. Ask "How much did I spend on coffee last month?" or "Where can I save money?".
+- **Spending Patterns**: The agent identifies recurring payments, abnormal spending spikes, and lifestyle inflation trends.
+- **Actionable Advice**: Receive tailored suggestions on budget optimization based on your actual spending history.
 
-- `frontend/`: React application (Vite + TypeScript + MUI + Ant Design Pro Components).
-- `backend/`: Python API server (FastAPI + SQLAlchemy + AI integration).
+### 3. 📊 Comprehensive Dashboard
+- **Visual Overview**: Clear breakdown of expenses by category and card.
+- **Transaction Management**: Search, filter, and manually adjust any transaction record.
+- **Portfolio Tracking**: Keep track of your investment assets alongside your expenses.
+
+## Tech Stack
+
+- **Frontend**: React, TypeScript, Vite, Ant Design Pro Components, MUI
+- **Backend**: Python, FastAPI, Pandas, SQLAlchemy
+- **AI Integration**: LangChain, OpenRouter (supporting various LLMs)
 
 ## Getting Started
 
@@ -44,25 +57,15 @@ Smart Finance is an intelligent personal finance assistant that combines a React
 
 ### Running the Application
 
-You can use the provided start script to run both frontend and backend:
+Use the provided start script:
 
 ```bash
 ./start.sh
 ```
 
-Or run them strictly:
+### Configuration
 
-**Backend:**
-```bash
-cd backend
-uv run uvicorn app.main:app --reload
-```
-
-**Frontend:**
-```bash
-cd frontend
-npm run dev
-```
+Once running, go to **Settings** in the web UI to configure your LLM Provider (API Key, Base URL) and financial profile.
 
 ## Contributing
 
