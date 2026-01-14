@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 import pandas as pd
@@ -18,7 +19,7 @@ from app.schemas import (
     TextAnalysisRequest,
 )
 from app.services.pdf_processor import extract_text_from_pdf, anonymize_text
-from app.services.llm_client import analyze_transactions, chat_with_data
+from app.services.llm_client import analyze_transactions
 
 router = APIRouter()
 
@@ -201,7 +202,7 @@ def update_settings(settings: SettingsUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/chat")
-def chat(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     api_key = get_setting(db, "api_key")
     base_url = get_setting(db, "base_url", "https://openrouter.ai/api/v1")
     model_name = get_setting(db, "model_name", "qwen/qwen3-next-80b-a3b-instruct")
@@ -212,9 +213,10 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     # Load transactions for context
     transactions = db.query(TransactionModel).all()
     if not transactions:
-        return {
-            "response": "No transaction data available yet. Please upload a PDF first."
-        }
+        return StreamingResponse(
+            iter(["No transaction data available yet. Please upload a PDF first."]),
+            media_type="text/plain",
+        )
 
     # Convert SQLAlchemy models to dicts for DataFrame
     data = [
@@ -234,18 +236,23 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     income = float(get_setting(db, "monthly_income", "0"))
     investments = float(get_setting(db, "investments", "0"))
 
-    response = chat_with_data(
-        request.history,
-        request.message,
-        df,
-        api_key,
-        base_url,
-        model_name,
-        income,
-        investments,
-    )
+    # Use the streaming service function
+    # Note: endpoints must import the new stream_chat_with_data function
+    from app.services.llm_client import stream_chat_with_data
 
-    return {"response": response}
+    return StreamingResponse(
+        stream_chat_with_data(
+            request.history,
+            request.message,
+            df,
+            api_key,
+            base_url,
+            model_name,
+            income,
+            investments,
+        ),
+        media_type="text/plain",
+    )
 
 
 @router.get("/stats")

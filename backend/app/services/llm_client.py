@@ -299,7 +299,75 @@ def generate_financial_advice(
     )
 
 
-def chat_with_data(
+async def stream_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
+    """
+    Streaming executor for LangChain's Pandas DataFrame Agent.
+    Yields chunks of the final answer.
+    """
+    print("DEBUG: Executing LangChain Pandas Agent (Streaming)...")
+
+    try:
+        # Work on a deep copy
+        df_for_agent = df.copy(deep=True)
+        llm = _get_llm(api_key, base_url, model, temperature=0)
+
+        # Create the agent
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", pd.errors.SettingWithCopyWarning)
+            agent = create_pandas_dataframe_agent(
+                llm,
+                df_for_agent,
+                verbose=True,
+                agent_type="openai-tools",
+                allow_dangerous_code=True,
+                max_iterations=max_turns,
+                handle_parsing_errors=True,
+            )
+
+        print(f"DEBUG: Streaming Agent with query: {query[:50]}...")
+
+        # Use astream_events to get granular updates
+        # We perform a simple filter: only yield chunks from the final 'on_chat_model_stream'
+        # or similar events that represent the final text output.
+        # Alternatively, using agent.astream() with stream_mode="values" is often simpler for final output.
+        # But 'openai-tools' agents are complex. Let's try agent.astream() which usually yields Input/Output dicts.
+        # For actual token streaming, we need to iterate over the 'messages' from appropriate events.
+
+        async for chunk in agent.astream_events({"input": query}, version="v2"):
+            event = chunk["event"]
+
+            # Debug: Log all events to understand structure (可以之后删除)
+            if "tool" in event.lower():
+                print(
+                    f"DEBUG TOOL EVENT: {event} | name={chunk.get('name')} | data keys={list(chunk.get('data', {}).keys())}"
+                )
+
+            # Tool Start
+            if event == "on_tool_start":
+                tool_name = chunk.get("name", "unknown")
+                print(f"DEBUG: Yielding tool start for: {tool_name}")
+                yield f"\n> 🔧 调用工具: {tool_name}\n"
+
+            # Tool End
+            elif event == "on_tool_end":
+                tool_name = chunk.get("name", "unknown")
+                print(f"DEBUG: Yielding tool end for: {tool_name}")
+                yield f"\n> ✅ 工具 {tool_name} 执行完毕\n"
+
+            # 'on_chat_model_stream' gives us tokens from the LLM
+            elif event == "on_chat_model_stream":
+                data = chunk["data"]
+                if "chunk" in data:
+                    content = data["chunk"].content
+                    if content:
+                        yield content
+
+    except Exception as e:
+        print(f"Error running LangChain Agent (Stream): {e}")
+        yield f"Agent Error: {e}. Please try a different model."
+
+
+async def stream_chat_with_data(
     history,
     current_query,
     df,
@@ -310,7 +378,7 @@ def chat_with_data(
     investments=0,
 ):
     """
-    Handles chat interaction using the LangChain Agent.
+    Handles chat interaction using the LangChain Agent with Streaming.
     """
     df_summary = _summarize_dataframe(df)
     base_prompt = _get_agent_base_prompt(df_summary)
@@ -337,5 +405,8 @@ def chat_with_data(
 3. 如果需要进行计算，请调用 pandas 工具。
 4. 请用中文回答。
 """
-
-    return run_autonomous_agent(df, full_prompt, api_key, base_url, model, max_turns=20)
+    # Delegate to the streaming executor
+    async for token in stream_autonomous_agent(
+        df, full_prompt, api_key, base_url, model
+    ):
+        yield token

@@ -98,9 +98,20 @@ export interface ChatMessage {
   content: string;
 }
 
-export const sendChatMessage = async (message: string, history: ChatMessage[]) => {
-  const response = await api.post('/chat', { message, history });
+export const sendChatMessage = async (message: string, history: { role: 'user' | 'assistant', content: string }[]) => {
+  const response = await api.post<{ response: string }>('/chat', { message, history });
   return response.data;
+};
+
+export const sendChatMessageStream = async (message: string, history: { role: 'user' | 'assistant', content: string }[]) => {
+  const response = await fetch('http://127.0.0.1:8000/api/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message, history }),
+  });
+  return response;
 };
 
 export default api;

@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, CircularProgress } from '@mui/material';
 import { AutoAwesome, Delete, SmartToy } from '@mui/icons-material';
 import { ProChat } from '@ant-design/pro-chat';
 import { useTheme } from '@mui/material/styles';
-import { sendChatMessage } from '../api';
+import { sendChatMessageStream } from '../api';
 import type { ProChatInstance } from '@ant-design/pro-chat';
 import { isAxiosError } from 'axios';
 
 export default function Chat() {
     const theme = useTheme();
     const chatRef = useRef<ProChatInstance | undefined>(undefined);
+    const [toolStatus, setToolStatus] = useState<string | null>(null);
     const [chatKey, setChatKey] = useState(0);
 
     // Clear chat history
@@ -27,8 +28,10 @@ export default function Chat() {
         }
     };
 
+    // ...
+
     return (
-        <Box sx={{ height: '85vh', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ height: '85vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
             {/* Header */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -69,6 +72,7 @@ export default function Chat() {
                     border: `1px solid ${theme.palette.divider}`,
                     bgcolor: 'background.paper',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                    position: 'relative', // For absolute positioning of status
                     '& .ant-pro-chat-list': {
                         paddingBottom: '20px',
                     },
@@ -90,6 +94,34 @@ export default function Chat() {
                     },
                 }}
             >
+                {/* Tool Status Indicator */}
+                {toolStatus && (
+                    <Box
+                        sx={{
+                            position: 'absolute',
+                            top: 16,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            zIndex: 10,
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            backdropFilter: 'blur(8px)',
+                            border: `1px solid ${theme.palette.primary.light}`,
+                            borderRadius: '20px',
+                            padding: '6px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                            animation: 'fadeIn 0.3s ease-in-out',
+                        }}
+                    >
+                        <CircularProgress size={14} thickness={5} />
+                        <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                            {toolStatus}
+                        </Typography>
+                    </Box>
+                )}
+
                 <ProChat
                     key={chatKey}
                     chatRef={chatRef}
@@ -110,7 +142,6 @@ export default function Chat() {
                     request={async (messages) => {
                         try {
                             // Extract history (excluding the current user message being sent)
-                            // ProChat passes the full list including the latest user message
                             const history = messages.slice(0, -1).map(m => ({
                                 role: m.role as 'user' | 'assistant',
                                 content: typeof m.content === 'string' ? m.content : ''
@@ -119,12 +150,59 @@ export default function Chat() {
                             const content = typeof lastMsg.content === 'string' ? lastMsg.content : '';
 
                             // Call our backend API
-                            const data = await sendChatMessage(content, history);
+                            const response = await sendChatMessageStream(content, history);
+                            const reader = response.body?.getReader();
+                            const decoder = new TextDecoder();
 
-                            // Return response as a mock stream for ProChat's typewriter effect
-                            return new Response(data.response);
+                            if (!reader) return new Response("Error: No stream");
+
+                            // Create a custom stream that filters out tool logs
+                            const stream = new ReadableStream({
+                                async start(controller) {
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) {
+                                            setToolStatus(null);
+                                            controller.close();
+                                            break;
+                                        }
+
+                                        const text = decoder.decode(value, { stream: true });
+
+                                        // Debug: Log all incoming text
+                                        console.log('Stream chunk:', JSON.stringify(text));
+
+                                        // Check for tool markers
+                                        // Simple check: splitting by lines to be safe against mixed chunks
+                                        // Ideally we buffer, but for this specific strict backend format,
+                                        // checking if the chunk *contains* the marker is likely enough for V1.
+                                        // The backend sends distinct yields for these messages.
+
+                                        if (text.includes("> 🔧 调用工具:")) {
+                                            const match = text.match(/> 🔧 调用工具: (.*)/);
+                                            console.log('Tool start detected:', match);
+                                            if (match) setToolStatus(`正在调用工具: ${match[1].trim()}`);
+                                            // Don't enqueue this text
+                                            continue;
+                                        }
+
+                                        if (text.includes("> ✅ 工具")) {
+                                            // Tool done
+                                            console.log('Tool end detected');
+                                            setToolStatus(null);
+                                            continue;
+                                        }
+
+                                        // Regular content
+                                        controller.enqueue(value);
+                                    }
+                                }
+                            });
+
+                            return new Response(stream);
                         } catch (error) {
                             console.error(error);
+                            setToolStatus(null);
                             let detail = "抱歉，遇到了一些连接问题，请稍后重试。";
                             if (isAxiosError(error) && error.response?.data?.detail) {
                                 detail = error.response.data.detail;
