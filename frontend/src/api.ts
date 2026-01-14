@@ -67,8 +67,8 @@ export const parsePdf = async (file: File) => {
 };
 
 // New: Step 2 - Analyze Text
-export const analyzeText = async (text: string, source_filename: string) => {
-  const response = await api.post<{ message: string, transactions_added: number, transactions: Transaction[] }>('/analyze_text', { text, source_filename });
+export const analyzeText = async (text: string, source_filename: string, language: string = 'zh') => {
+  const response = await api.post<{ message: string, transactions_added: number, transactions: Transaction[] }>('/analyze_text', { text, source_filename, language });
   return response.data;
 };
 
@@ -98,18 +98,18 @@ export interface ChatMessage {
   content: string;
 }
 
-export const sendChatMessage = async (message: string, history: { role: 'user' | 'assistant', content: string }[]) => {
-  const response = await api.post<{ response: string }>('/chat', { message, history });
+export const sendChatMessage = async (message: string, history: { role: 'user' | 'assistant', content: string }[], language: string = 'zh') => {
+  const response = await api.post<{ response: string }>('/chat', { message, history, language });
   return response.data;
 };
 
-export const sendChatMessageStream = async (message: string, history: { role: 'user' | 'assistant', content: string }[]) => {
+export const sendChatMessageStream = async (message: string, history: { role: 'user' | 'assistant', content: string }[], language: string = 'zh') => {
   const response = await fetch('http://127.0.0.1:8000/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, language }),
   });
   return response;
 };

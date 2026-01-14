@@ -3,8 +3,10 @@ import { Box, TextField, Button, Typography, Paper, Alert, Snackbar } from '@mui
 import { Settings as SettingsIcon, Save, Api, AccountBalance } from '@mui/icons-material';
 import { getSettings, updateSettings } from '../api';
 import { colors } from '../theme';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function SettingsPage() {
+    const { t } = useLanguage();
     const [settings, setSettings] = useState({
         api_key: '',
         base_url: '',
@@ -48,10 +50,10 @@ export default function SettingsPage() {
             };
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await updateSettings(payload as any);
-            setMsg({ type: 'success', text: '配置已保存！' });
+            setMsg({ type: 'success', text: t('settings.saved') });
         } catch (error) {
             console.error(error);
-            setMsg({ type: 'error', text: '保存失败，请检查输入格式。' });
+            setMsg({ type: 'error', text: t('settings.save_fail') });
         } finally {
             setSaving(false);
         }
@@ -63,7 +65,7 @@ export default function SettingsPage() {
             <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <SettingsIcon sx={{ fontSize: 40, color: 'primary.main' }} />
                 <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
-                    系统设置
+                    {t('settings.title')}
                 </Typography>
             </Box>
 
@@ -85,7 +87,7 @@ export default function SettingsPage() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
                         <Api sx={{ fontSize: 28, color: 'primary.main' }} />
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            LLM API 配置
+                            {t('settings.llm_config')}
                         </Typography>
                     </Box>
 
@@ -97,7 +99,7 @@ export default function SettingsPage() {
                             value={settings.api_key}
                             onChange={handleChange}
                             fullWidth
-                            helperText="请输入您的 LLM 提供商 API 密钥"
+                            helperText={t('settings.api_key_helper')}
                             variant="outlined"
                         />
                         <TextField
@@ -106,16 +108,16 @@ export default function SettingsPage() {
                             value={settings.base_url}
                             onChange={handleChange}
                             fullWidth
-                            helperText="例如: https://openrouter.ai/api/v1"
+                            helperText={t('settings.base_url_helper')}
                             placeholder="https://openrouter.ai/api/v1"
                         />
                         <TextField
-                            label="模型名称"
+                            label={t('settings.model_name') || "模型名称"}
                             name="model_name"
                             value={settings.model_name}
                             onChange={handleChange}
                             fullWidth
-                            helperText="例如: qwen/qwen3-next-80b-a3b-instruct"
+                            helperText={t('settings.model_name_helper')}
                             placeholder="qwen/qwen3-next-80b-a3b-instruct"
                         />
                     </Box>
@@ -137,16 +139,16 @@ export default function SettingsPage() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
                         <AccountBalance sx={{ fontSize: 28, color: 'primary.main' }} />
                         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            财务背景
+                            {t('settings.finance_bg')}
                         </Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ mb: 3, display: 'block' }}>
-                        可选信息，帮助 AI 提供更个性化的财务建议
+                        {t('settings.finance_bg_helper')}
                     </Typography>
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                         <TextField
-                            label="月收入 (¥)"
+                            label={t('settings.monthly_income')}
                             name="monthly_income"
                             type="number"
                             value={settings.monthly_income}
@@ -156,7 +158,7 @@ export default function SettingsPage() {
                             placeholder="10000"
                         />
                         <TextField
-                            label="当前投资总额 (¥)"
+                            label={t('settings.investments')}
                             name="investments"
                             type="number"
                             value={settings.investments}
@@ -183,7 +185,7 @@ export default function SettingsPage() {
                             minWidth: 140,
                         }}
                     >
-                        {saving ? '保存中...' : '保存配置'}
+                        {saving ? t('settings.saving') : t('settings.save')}
                     </Button>
                 </Box>
             </Box>

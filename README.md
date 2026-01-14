@@ -2,6 +2,8 @@
 
 Smart Finance is an intelligent personal finance system designed to automate the tedious process of expense tracking. By leveraging advanced **Large Language Models (LLMs)**, it transforms raw credit card statements into actionable financial insights.
 
+[English](./README.md) | [中文](./README_ZH.md)
+
 ## Core Features
 
 ### 1. 💳 Intelligent Credit Card Bill Analysis

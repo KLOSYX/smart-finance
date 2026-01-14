@@ -140,7 +140,7 @@ async def analyze_text(request: TextAnalysisRequest, db: Session = Depends(get_d
     # 3. Analyze with LLM
     try:
         extracted_data = await analyze_transactions(
-            request.text, api_key, base_url, model_name
+            request.text, api_key, base_url, model_name, request.language
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM analysis failed: {str(e)}")
@@ -250,6 +250,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             model_name,
             income,
             investments,
+            request.language,
         ),
         media_type="text/plain",
     )

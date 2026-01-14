@@ -7,6 +7,8 @@ import Transactions from './pages/Transactions';
 import Chat from './pages/Chat';
 import SettingsPage from './pages/Settings';
 
+import { LanguageProvider } from './contexts/LanguageContext';
+
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
 
@@ -26,15 +28,17 @@ function App() {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Navbar onNavigate={setCurrentPage} activePage={currentPage} />
-      <Container maxWidth="xl" sx={{ mt: 10, mb: 4, px: { xs: 2, sm: 3, md: 4 } }}>
-        <Box>
-          {renderPage()}
-        </Box>
-      </Container>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Navbar onNavigate={setCurrentPage} activePage={currentPage} />
+        <Container maxWidth="xl" sx={{ mt: 10, mb: 4, px: { xs: 2, sm: 3, md: 4 } }}>
+          <Box>
+            {renderPage()}
+          </Box>
+        </Container>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }
 

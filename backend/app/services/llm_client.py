@@ -26,6 +26,22 @@ CATEGORIES = [
     "其他",
 ]
 
+CATEGORIES_EN = [
+    "Housing",
+    "Food & Dining",
+    "Transportation",
+    "Utilities",
+    "Shopping",
+    "Entertainment",
+    "Health & Fitness",
+    "Travel",
+    "Education",
+    "Debt",
+    "Savings/Investments",
+    "Needs Review",
+    "Other",
+]
+
 
 class OpenRouterChatOpenAI(ChatOpenAI):
     """
@@ -66,12 +82,16 @@ def _format_financial_context(monthly_income=0, investments=0):
     return context
 
 
-def _get_agent_base_prompt(df_summary):
+def _get_agent_base_prompt(df_summary, language="zh"):
     """
     Returns the core instructions for the data analysis agent.
     """
+    lang_instruction = (
+        "Please answer in English." if language == "en" else "请用中文回答。"
+    )
+
     return f"""
-你是一位高级财务数据分析师。请用中文回答。
+你是一位高级财务数据分析师。{lang_instruction}
 所有货币单位均为人民币 (¥)。正数表示支出，负数表示退款。
 
 编写/修改 pandas 代码时请使用 .loc 避免链式赋值警告；如需对切片修改，请先 copy()。
@@ -81,8 +101,8 @@ def _get_agent_base_prompt(df_summary):
 """
 
 
-def get_categories():
-    return CATEGORIES
+def get_categories(language="zh"):
+    return CATEGORIES_EN if language == "en" else CATEGORIES
 
 
 def _chunk_text(text, max_chars=8000):
@@ -106,7 +126,9 @@ def _chunk_text(text, max_chars=8000):
     return chunks
 
 
-async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
+async def _process_chunk_async(
+    chunk, api_key, base_url, model_name, semaphore, language="zh"
+):
     """
     Process a single chunk using LangChain asynchronously.
     """
@@ -116,8 +138,13 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
 
             current_year = datetime.datetime.now().year
 
+            target_categories = CATEGORIES_EN if language == "en" else CATEGORIES
+
+            # Example category for the prompt (Shopping / 购物)
+            ex_category = target_categories[4]
+
             system_prompt = f"""
-            你是一位专业的财务助手。你的任务是从提供的文本中提取信用卡交易详情，并将每笔交易分类到以下类别之一：{", ".join(CATEGORIES)}。
+            你是一位专业的财务助手。你的任务是从提供的文本中提取信用卡交易详情，并将每笔交易分类到以下类别之一：{", ".join(target_categories)}。
 
             严格以JSON对象列表的形式返回输出。每个对象必须包含以下键：
             - "Date": 交易日期 (格式 YYYY-MM-DD)。如果年份缺失，假设为 {current_year}。
@@ -134,7 +161,7 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
                     "Date": "2023-01-01",
                     "Description": "超市",
                     "Amount": 50.00,
-                    "Category": "购物",
+                    "Category": "{ex_category}",
                     "CardLastFour": "1234"
                 }}
             ]
@@ -162,7 +189,7 @@ async def _process_chunk_async(chunk, api_key, base_url, model_name, semaphore):
             return []
 
 
-async def analyze_transactions(text, api_key, base_url, model):
+async def analyze_transactions(text, api_key, base_url, model, language="zh"):
     """
     Sends the anonymized text to the LLM to extract and classify transactions using LangChain asynchronously.
     """
@@ -176,7 +203,7 @@ async def analyze_transactions(text, api_key, base_url, model):
     semaphore = asyncio.Semaphore(5)
 
     tasks = [
-        _process_chunk_async(chunk, api_key, base_url, model, semaphore)
+        _process_chunk_async(chunk, api_key, base_url, model, semaphore, language)
         for chunk in chunks
     ]
 
@@ -282,7 +309,7 @@ def agentic_financial_advice(
 3. 计算储蓄率（如果提供了收入信息）并评估财务健康状况。
 4. 检测任何异常支出。
 
-请用中文输出结构化的建议，包含 3-5 条具体建议。
+请给出 3-5 条具体建议。
 """
 
     return run_autonomous_agent(df, full_prompt, api_key, base_url, model)
@@ -376,21 +403,27 @@ async def stream_chat_with_data(
     model,
     monthly_income=0,
     investments=0,
+    language="zh",
 ):
     """
     Handles chat interaction using the LangChain Agent with Streaming.
     """
     df_summary = _summarize_dataframe(df)
-    base_prompt = _get_agent_base_prompt(df_summary)
+    base_prompt = _get_agent_base_prompt(df_summary, language)
     fin_context = _format_financial_context(monthly_income, investments)
 
     history_str = ""
     if history:
-        history_str = "对话历史：\n"
+        history_str = "Dialog History:\n" if language == "en" else "对话历史：\n"
         for msg in history[-5:]:
-            role = "用户" if msg["role"] == "user" else "AI"
+            role = (
+                ("User" if msg["role"] == "user" else "AI")
+                if language == "en"
+                else ("用户" if msg["role"] == "user" else "AI")
+            )
             history_str += f"{role}: {msg['content']}\n"
 
+    # Keep prompt prompt structure in Chinese, just adapt the language requirement
     full_prompt = f"""
 {base_prompt}
 
@@ -403,7 +436,6 @@ async def stream_chat_with_data(
 1. 如果问题是闲聊，请礼貌地回答。
 2. 如果需要数据，请分析 DataFrame `df` 并结合财务背景给出分析结论。
 3. 如果需要进行计算，请调用 pandas 工具。
-4. 请用中文回答。
 """
     # Delegate to the streaming executor
     async for token in stream_autonomous_agent(

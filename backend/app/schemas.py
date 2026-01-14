@@ -43,8 +43,10 @@ class SettingsUpdate(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: List[dict] = []
+    language: str = "zh"
 
 
 class TextAnalysisRequest(BaseModel):
     text: str
     source_filename: str
+    language: str = "zh"

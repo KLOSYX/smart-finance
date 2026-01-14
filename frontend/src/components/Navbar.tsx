@@ -4,8 +4,10 @@ import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import { TrendingUp } from '@mui/icons-material';
+import IconButton from '@mui/material/IconButton';
+import { TrendingUp, Language } from '@mui/icons-material';
 import { colors } from '../theme';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface NavbarProps {
   onNavigate: (page: string) => void;
@@ -15,6 +17,7 @@ interface NavbarProps {
 export default function Navbar({ onNavigate, activePage }: NavbarProps) {
   const [prevScrollPos, setPrevScrollPos] = useState(0);
   const [visible, setVisible] = useState(true);
+  const { t, toggleLanguage, language } = useLanguage();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -73,23 +76,30 @@ export default function Navbar({ onNavigate, activePage }: NavbarProps) {
               display: { xs: 'none', sm: 'block' },
             }}
           >
-            AI 智能理财
+            {t('navbar.title')}
           </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <Button onClick={() => onNavigate('dashboard')} sx={getButtonStyle('dashboard')}>
-            仪表盘
+            {t('navbar.dashboard')}
           </Button>
           <Button onClick={() => onNavigate('transactions')} sx={getButtonStyle('transactions')}>
-            交易明细
+            {t('navbar.transactions')}
           </Button>
           <Button onClick={() => onNavigate('chat')} sx={getButtonStyle('chat')}>
-            AI 顾问
+            {t('navbar.chat')}
           </Button>
           <Button onClick={() => onNavigate('settings')} sx={getButtonStyle('settings')}>
-            设置
+            {t('navbar.settings')}
           </Button>
+
+          <IconButton onClick={toggleLanguage} sx={{ color: 'white', ml: 1 }}>
+            <Language />
+            <Typography variant="caption" sx={{ ml: 0.5, fontWeight: 600 }}>
+              {language === 'zh' ? 'EN' : '中'}
+            </Typography>
+          </IconButton>
         </Box>
       </Toolbar>
     </AppBar>

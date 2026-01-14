@@ -12,6 +12,7 @@ import { TrendingUp, AccountBalance } from '@mui/icons-material';
 import { getStats, getTransactions } from '../api';
 import type { Transaction } from '../api';
 import { colors } from '../theme';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface CategorySummary {
     Category: string;
@@ -45,6 +46,7 @@ const CHART_COLORS = [
 ];
 
 export default function Dashboard() {
+    const { t } = useLanguage();
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -94,7 +96,7 @@ export default function Dashboard() {
         return (
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 2 }}>
                 <CircularProgress size={60} thickness={4} />
-                <Typography variant="body1" color="text.secondary">加载中...</Typography>
+                <Typography variant="body1" color="text.secondary">{t('common.loading')}</Typography>
             </Box>
         );
     }
@@ -103,9 +105,9 @@ export default function Dashboard() {
         return (
             <Box sx={{ py: 8 }}>
                 <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto', borderRadius: 3 }}>
-                    <Typography variant="h6" gutterBottom>暂无数据</Typography>
+                    <Typography variant="h6" gutterBottom>{t('common.no_data')}</Typography>
                     <Typography variant="body2">
-                        请前往 <strong>交易明细</strong> 页面上传您的账单，开始使用智能理财分析功能。
+                        {t('common.no_data_helper')}
                     </Typography>
                 </Alert>
             </Box>
@@ -125,7 +127,7 @@ export default function Dashboard() {
             <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <TrendingUp sx={{ fontSize: 40, color: 'primary.main' }} />
                 <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
-                    财务概览
+                    {t('dashboard.title')}
                 </Typography>
             </Box>
 
@@ -150,7 +152,7 @@ export default function Dashboard() {
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
                                 <AccountBalance sx={{ fontSize: 28, opacity: 0.9 }} />
                                 <Typography variant="subtitle1" sx={{ opacity: 0.9, fontWeight: 500 }}>
-                                    总支出
+                                    {t('dashboard.total_expense')}
                                 </Typography>
                             </Box>
                             <Typography variant="h3" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
@@ -181,10 +183,10 @@ export default function Dashboard() {
                         }}
                     >
                         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            各类支出对比
+                            {t('dashboard.bar_title')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            点击柱状图查看分类详情
+                            {t('dashboard.bar_helper')}
                         </Typography>
                         <Box sx={{ flexGrow: 1, width: '100%', cursor: 'pointer' }}>
                             <BarChart
@@ -199,7 +201,7 @@ export default function Dashboard() {
                                 }]}
                                 series={[{
                                     dataKey: 'Amount',
-                                    label: '金额 (¥)',
+                                    label: t('transactions.table.amount') + ' (¥)',
                                     color: colors.primary.main,
                                 }]}
                                 onItemClick={handleItemClick}
@@ -228,10 +230,10 @@ export default function Dashboard() {
                         }}
                     >
                         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            支出分布占比
+                            {t('dashboard.pie_title')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            点击饼图查看分类详情
+                            {t('dashboard.pie_helper')}
                         </Typography>
                         <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
                             <PieChart
@@ -271,10 +273,10 @@ export default function Dashboard() {
                         }}
                     >
                         <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            信用卡支出分布
+                            {t('dashboard.card_title')}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            不同信用卡的支出比例
+                            {t('dashboard.card_helper')}
                         </Typography>
                         <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
                             {stats.card_summary && stats.card_summary.length > 0 ? (
@@ -299,7 +301,7 @@ export default function Dashboard() {
                                 />
                             ) : (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                    <Typography color="text.secondary">暂无卡号数据</Typography>
+                                    <Typography color="text.secondary">{t('common.no_card_data')}</Typography>
                                 </Box>
                             )}
                         </Box>
@@ -319,10 +321,10 @@ export default function Dashboard() {
             >
                 <DialogTitle sx={{ pb: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {selectedCategory} 支出明细
+                        {selectedCategory} {t('dashboard.detail_title')}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                        共 {categoryTransactions.length} 笔交易
+                        {t('dashboard.total_transactions').replace('{count}', categoryTransactions.length.toString())}
                     </Typography>
                 </DialogTitle>
                 <DialogContent dividers sx={{ p: 0 }}>
@@ -335,9 +337,9 @@ export default function Dashboard() {
                             <Table size="small" sx={{ minWidth: 500 }}>
                                 <TableHead>
                                     <TableRow sx={{ backgroundColor: 'background.default' }}>
-                                        <TableCell sx={{ fontWeight: 600 }}>日期</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 600 }}>金额</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.date')}</TableCell>
+                                        <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.desc')}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 600 }}>{t('transactions.table.amount')}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -359,7 +361,7 @@ export default function Dashboard() {
                                     {categoryTransactions.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                                                无数据
+                                                {t('common.no_data')}
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -370,7 +372,7 @@ export default function Dashboard() {
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setOpenDialog(false)} variant="outlined">
-                        关闭
+                        {t('common.close')}
                     </Button>
                 </DialogActions>
             </Dialog>

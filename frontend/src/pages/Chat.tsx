@@ -6,16 +6,18 @@ import { useTheme } from '@mui/material/styles';
 import { sendChatMessageStream } from '../api';
 import type { ProChatInstance } from '@ant-design/pro-chat';
 import { isAxiosError } from 'axios';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Chat() {
     const theme = useTheme();
+    const { t, language } = useLanguage();
     const chatRef = useRef<ProChatInstance | undefined>(undefined);
     const [toolStatus, setToolStatus] = useState<string | null>(null);
     const [chatKey, setChatKey] = useState(0);
 
     // Clear chat history
     const handleClear = () => {
-        if (window.confirm("确定要清空所有对话历史吗？")) {
+        if (window.confirm(t('chat.confirm_clear'))) {
             localStorage.removeItem('pro_chat_history');
             setChatKey(prev => prev + 1);
         }
@@ -24,7 +26,7 @@ export default function Chat() {
     // Generate financial advice
     const generateAdvice = () => {
         if (chatRef.current) {
-            chatRef.current.sendMessage("请根据我的交易记录，分析我的消费习惯并给出具体的财务建议。请包含：1. 主要支出类别分析 2. 异常消费提醒 3. 省钱建议。");
+            chatRef.current.sendMessage(t('chat.prompt_generate'));
         }
     };
 
@@ -37,7 +39,7 @@ export default function Chat() {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <SmartToy sx={{ fontSize: 32, color: 'primary.main' }} />
                     <Typography variant="h5" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
-                        AI 财务顾问
+                        {t('chat.title')}
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -48,7 +50,7 @@ export default function Chat() {
                         onClick={generateAdvice}
                         sx={{ cursor: 'pointer', borderRadius: 2 }}
                     >
-                        生成分析报告
+                        {t('chat.generate_report')}
                     </Button>
                     <Button
                         variant="outlined"
@@ -58,7 +60,7 @@ export default function Chat() {
                         onClick={handleClear}
                         sx={{ cursor: 'pointer', borderRadius: 2 }}
                     >
-                        清空记录
+                        {t('chat.clear_history')}
                     </Button>
                 </Box>
             </Box>
@@ -128,7 +130,7 @@ export default function Chat() {
                     style={{ height: '100%', background: 'transparent' }}
                     // Use a simple localized placeholder
                     inputAreaProps={{
-                        placeholder: '请输入您的问题，例如："帮我分析一下上个月的餐饮支出"...',
+                        placeholder: t('chat.placeholder'),
                     }}
                     // Persist messages to localStorage
                     initialChats={(() => {
@@ -150,7 +152,7 @@ export default function Chat() {
                             const content = typeof lastMsg.content === 'string' ? lastMsg.content : '';
 
                             // Call our backend API
-                            const response = await sendChatMessageStream(content, history);
+                            const response = await sendChatMessageStream(content, history, language);
                             const reader = response.body?.getReader();
                             const decoder = new TextDecoder();
 
@@ -181,7 +183,7 @@ export default function Chat() {
                                         if (text.includes("> 🔧 调用工具:")) {
                                             const match = text.match(/> 🔧 调用工具: (.*)/);
                                             console.log('Tool start detected:', match);
-                                            if (match) setToolStatus(`正在调用工具: ${match[1].trim()}`);
+                                            if (match) setToolStatus(`${t('chat.calling_tool')}${match[1].trim()}`);
                                             // Don't enqueue this text
                                             continue;
                                         }
@@ -203,7 +205,7 @@ export default function Chat() {
                         } catch (error) {
                             console.error(error);
                             setToolStatus(null);
-                            let detail = "抱歉，遇到了一些连接问题，请稍后重试。";
+                            let detail = t('chat.connection_error');
                             if (isAxiosError(error) && error.response?.data?.detail) {
                                 detail = error.response.data.detail;
                             }
@@ -213,14 +215,14 @@ export default function Chat() {
                     // Custom user/assistant metadata
                     userMeta={{
                         avatar: 'https://api.dicebear.com/7.x/miniavs/svg?seed=user',
-                        title: '我',
+                        title: t('chat.role_user'),
                     }}
                     assistantMeta={{
                         avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=smart-finance',
-                        title: 'AI 顾问',
+                        title: t('chat.role_ai'),
                         backgroundColor: '#3B82F6',
                     }}
-                    locale="zh-CN"
+                    locale={language === 'zh' ? 'zh-CN' : 'en-US'}
                     actions={{
                         render: () => [],
                         flexConfig: {

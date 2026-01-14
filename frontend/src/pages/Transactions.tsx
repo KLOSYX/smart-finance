@@ -12,22 +12,38 @@ import { getTransactions, parsePdf, analyzeText, updateTransaction, clearAllTran
 import type { Transaction, TransactionCreate } from '../api';
 import { colors } from '../theme';
 import { isAxiosError } from 'axios';
+import { useLanguage } from '../contexts/LanguageContext';
 
-const CATEGORIES = [
+const CATEGORIES_ZH = [
     "住房", "餐饮", "交通", "公用事业", "购物", "娱乐",
     "健康与健身", "旅行", "教育", "债务", "储蓄/投资", "需要复核", "其他"
 ];
 
+const CATEGORIES_EN = [
+    "Housing", "Food & Dining", "Transportation", "Utilities", "Shopping", "Entertainment",
+    "Health & Fitness", "Travel", "Education", "Debt", "Savings/Investments", "Needs Review", "Other"
+];
+
 const CATEGORY_COLORS: Record<string, string> = {
+    // Chinese
     "住房": colors.primary.main,
     "餐饮": colors.cta.main,
     "交通": colors.success.main,
     "购物": '#8B5CF6',
     "娱乐": '#EC4899',
     "需要复核": '#F59E0B',
+    // English
+    "Housing": colors.primary.main,
+    "Food & Dining": colors.cta.main,
+    "Transportation": colors.success.main,
+    "Shopping": '#8B5CF6',
+    "Entertainment": '#EC4899',
+    "Needs Review": '#F59E0B',
 };
 
 export default function Transactions() {
+    const { t, language } = useLanguage();
+    const categories = language === 'en' ? CATEGORIES_EN : CATEGORIES_ZH;
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -46,7 +62,7 @@ export default function Transactions() {
         date: new Date().toISOString().split('T')[0],
         description: '',
         amount: 0,
-        category: '其他',
+        category: language === 'en' ? 'Other' : '其他',
         source: 'manual'
     });
 
@@ -58,13 +74,13 @@ export default function Transactions() {
                 setTransactions(data);
             } catch (error) {
                 console.error(error);
-                setErrorMsg("无法加载交易记录，请检查后端服务。");
+                setErrorMsg(t('transactions.errors.load'));
             } finally {
                 setLoading(false);
             }
         };
         fetchTransactions();
-    }, []);
+    }, [t]);
 
     const handleClearAll = async () => {
         try {
@@ -74,7 +90,7 @@ export default function Transactions() {
             setTransactions(data);
         } catch (error) {
             console.error(error);
-            setErrorMsg("清除失败，请重试。");
+            setErrorMsg(t('transactions.errors.clear'));
         }
     };
 
@@ -86,14 +102,14 @@ export default function Transactions() {
                 date: new Date().toISOString().split('T')[0],
                 description: '',
                 amount: 0,
-                category: '其他',
+                category: language === 'en' ? 'Other' : '其他',
                 source: 'manual'
             });
             const data = await getTransactions();
             setTransactions(data);
         } catch (error) {
             console.error(error);
-            setErrorMsg("添加失败，请检查输入。");
+            setErrorMsg(t('transactions.errors.add'));
         }
     };
 
@@ -107,7 +123,7 @@ export default function Transactions() {
                 setCurrentFilename(result.filename);
                 setReviewOpen(true);
             } catch (error) {
-                setErrorMsg("解析失败。请检查 API 配置或 PDF 格式。");
+                setErrorMsg(t('transactions.errors.parse'));
                 console.error(error);
             } finally {
                 setUploading(false);
@@ -119,13 +135,14 @@ export default function Transactions() {
     const handleConfirmAnalysis = async () => {
         setAnalyzing(true);
         try {
-            const response = await analyzeText(reviewText, currentFilename);
+            const response = await analyzeText(reviewText, currentFilename, language);
             setReviewOpen(false);
             const data = await getTransactions();
             setTransactions(data);
 
             if (response.transactions) {
-                const needingReview = response.transactions.filter(t => t.category === "需要复核");
+                const reviewKey = language === 'en' ? "Needs Review" : "需要复核";
+                const needingReview = response.transactions.filter(t => t.category === reviewKey);
                 if (needingReview.length > 0) {
                     setReviewTransactions(needingReview);
                     setNeedsReviewOpen(true);
@@ -133,7 +150,7 @@ export default function Transactions() {
             }
         } catch (error) {
             console.error(error);
-            let detail = "分析失败，请稍后重试。";
+            let detail = t('transactions.errors.analyze');
             if (isAxiosError(error) && error.response?.data?.detail) {
                 detail = error.response.data.detail;
             } else if (error instanceof Error) {
@@ -153,7 +170,7 @@ export default function Transactions() {
             await updateTransaction(id, { category: newCategory });
         } catch (error) {
             console.error("Failed to update category", error);
-            setErrorMsg("更新分类失败");
+            setErrorMsg(t('transactions.errors.update_cat'));
             const data = await getTransactions();
             setTransactions(data);
         }
@@ -187,7 +204,7 @@ export default function Transactions() {
             <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Receipt sx={{ fontSize: 40, color: 'primary.main' }} />
                 <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif', flexGrow: 1 }}>
-                    交易明细
+                    {t('transactions.title')}
                 </Typography>
 
                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
@@ -197,7 +214,7 @@ export default function Transactions() {
                         onClick={() => setAddDialogOpen(true)}
                         sx={{ cursor: 'pointer' }}
                     >
-                        手动添加
+                        {t('transactions.actions.manual_add')}
                     </Button>
                     <Button
                         variant="contained"
@@ -206,7 +223,7 @@ export default function Transactions() {
                         disabled={uploading}
                         sx={{ cursor: 'pointer' }}
                     >
-                        上传账单
+                        {t('transactions.actions.upload')}
                         <input type="file" hidden accept=".pdf" onChange={handleFileUpload} />
                     </Button>
                     <Button
@@ -216,7 +233,7 @@ export default function Transactions() {
                         disabled={transactions.length === 0}
                         sx={{ cursor: 'pointer' }}
                     >
-                        导出
+                        {t('transactions.actions.export')}
                     </Button>
                     <Button
                         variant="outlined"
@@ -226,7 +243,7 @@ export default function Transactions() {
                         disabled={transactions.length === 0 || loading}
                         sx={{ cursor: 'pointer' }}
                     >
-                        清空
+                        {t('transactions.actions.clear')}
                     </Button>
                 </Box>
             </Box>
@@ -253,26 +270,26 @@ export default function Transactions() {
                     columns={[
                         {
                             field: 'date',
-                            headerName: '日期',
+                            headerName: t('transactions.table.date'),
                             width: 120,
                             valueGetter: (_value, row) => new Date(row.date),
                             valueFormatter: (value: Date) => value ? value.toLocaleDateString('zh-CN') : ''
                         },
                         {
                             field: 'description',
-                            headerName: '描述',
+                            headerName: t('transactions.table.desc'),
                             flex: 1,
                             minWidth: 200,
                         },
                         {
                             field: 'card_last_four',
-                            headerName: '卡号',
+                            headerName: t('transactions.table.card'),
                             width: 100,
                             valueFormatter: (value: string) => value ? `****${value}` : '-'
                         },
                         {
                             field: 'category',
-                            headerName: '类别',
+                            headerName: t('transactions.table.category'),
                             width: 140,
                             renderCell: (params: GridRenderCellParams) => (
                                 <Chip
@@ -285,15 +302,15 @@ export default function Transactions() {
                                         cursor: 'pointer',
                                     }}
                                     onClick={() => {
-                                        const newCategoryIndex = (CATEGORIES.indexOf(params.value) + 1) % CATEGORIES.length;
-                                        handleCategoryChange(params.row.id, { target: { value: CATEGORIES[newCategoryIndex] } } as SelectChangeEvent);
+                                        const newCategoryIndex = (categories.indexOf(params.value) + 1) % categories.length;
+                                        handleCategoryChange(params.row.id, { target: { value: categories[newCategoryIndex] } } as SelectChangeEvent);
                                     }}
                                 />
                             )
                         },
                         {
                             field: 'amount',
-                            headerName: '金额 (¥)',
+                            headerName: t('transactions.table.amount') + ' (¥)',
                             width: 130,
                             align: 'right',
                             headerAlign: 'right',
@@ -305,7 +322,7 @@ export default function Transactions() {
                                 </Box>
                             )
                         },
-                        { field: 'source', headerName: '来源', width: 140 },
+                        { field: 'source', headerName: t('transactions.table.source'), width: 140 },
                     ]}
                     loading={loading}
                     initialState={{
@@ -325,11 +342,11 @@ export default function Transactions() {
             {/* Review Dialog */}
             <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
                 <DialogTitle sx={{ pb: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>隐私审查</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>{t('transactions.dialogs.privacy_title')}</Typography>
                 </DialogTitle>
                 <DialogContent>
                     <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
-                        请检查下方提取的文本，确保所有敏感信息已被移除或脱敏。
+                        {t('transactions.dialogs.privacy_helper')}
                     </Alert>
                     <TextField
                         multiline
@@ -342,7 +359,7 @@ export default function Transactions() {
                     />
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setReviewOpen(false)} variant="outlined">取消</Button>
+                    <Button onClick={() => setReviewOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
                     <Button
                         onClick={handleConfirmAnalysis}
                         variant="contained"
@@ -350,38 +367,38 @@ export default function Transactions() {
                         startIcon={analyzing && <CircularProgress size={20} color="inherit" />}
                         sx={{ cursor: 'pointer' }}
                     >
-                        确认并分析
+                        {t('transactions.actions.confirm_analyze')}
                     </Button>
                 </DialogActions>
             </Dialog>
 
             {/* Clear Confirmation */}
             <Dialog open={clearConfirmOpen} onClose={() => setClearConfirmOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle>确认清空</DialogTitle>
+                <DialogTitle>{t('transactions.dialogs.clear_title')}</DialogTitle>
                 <DialogContent>
-                    <Typography>您确定要清空所有交易记录吗？此操作不可撤销。</Typography>
+                    <Typography>{t('transactions.dialogs.clear_msg')}</Typography>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setClearConfirmOpen(false)} variant="outlined">取消</Button>
-                    <Button onClick={handleClearAll} variant="contained" color="error" sx={{ cursor: 'pointer' }}>确认</Button>
+                    <Button onClick={() => setClearConfirmOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
+                    <Button onClick={handleClearAll} variant="contained" color="error" sx={{ cursor: 'pointer' }}>{t('transactions.actions.confirm')}</Button>
                 </DialogActions>
             </Dialog>
 
             {/* Needs Review Dialog */}
             <Dialog open={needsReviewOpen} onClose={() => setNeedsReviewOpen(false)} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle>交易复核</DialogTitle>
+                <DialogTitle>{t('transactions.dialogs.review_title')}</DialogTitle>
                 <DialogContent>
                     <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-                        以下交易被标记为"需要复核"，请检查并点击分类标签更新。
+                        {t('transactions.dialogs.review_helper')}
                     </Alert>
                     <TableContainer>
                         <Table>
                             <TableHead>
                                 <TableRow sx={{ backgroundColor: 'background.default' }}>
-                                    <TableCell sx={{ fontWeight: 600 }}>日期</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>描述</TableCell>
-                                    <TableCell sx={{ fontWeight: 600 }}>类别</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 600 }}>金额</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.date')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.desc')}</TableCell>
+                                    <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.category')}</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 600 }}>{t('transactions.table.amount')}</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -399,7 +416,7 @@ export default function Transactions() {
                                                 size="small"
                                                 sx={{ minWidth: 120 }}
                                             >
-                                                {CATEGORIES.map(cat => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
+                                                {categories.map(cat => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
                                             </Select>
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 600 }}>
@@ -412,17 +429,17 @@ export default function Transactions() {
                     </TableContainer>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setNeedsReviewOpen(false)} variant="contained" sx={{ cursor: 'pointer' }}>完成</Button>
+                    <Button onClick={() => setNeedsReviewOpen(false)} variant="contained" sx={{ cursor: 'pointer' }}>{t('transactions.actions.done')}</Button>
                 </DialogActions>
             </Dialog>
 
             {/* Add Transaction Dialog */}
             <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle>添加交易</DialogTitle>
+                <DialogTitle>{t('transactions.dialogs.add_title')}</DialogTitle>
                 <DialogContent>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
                         <TextField
-                            label="日期"
+                            label={t('transactions.table.date')}
                             type="date"
                             fullWidth
                             InputLabelProps={{ shrink: true }}
@@ -430,13 +447,13 @@ export default function Transactions() {
                             onChange={(e) => setNewTransaction({ ...newTransaction, date: e.target.value })}
                         />
                         <TextField
-                            label="描述"
+                            label={t('transactions.table.desc')}
                             fullWidth
                             value={newTransaction.description}
                             onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
                         />
                         <TextField
-                            label="金额 (¥)"
+                            label={t('transactions.table.amount') + " (¥)"}
                             type="number"
                             fullWidth
                             value={newTransaction.amount}
@@ -444,24 +461,24 @@ export default function Transactions() {
                         />
                         <TextField
                             select
-                            label="类别"
+                            label={t('transactions.table.category')}
                             fullWidth
                             value={newTransaction.category}
                             onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
                         >
-                            {CATEGORIES.map((cat) => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
+                            {categories.map((cat) => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
                         </TextField>
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setAddDialogOpen(false)} variant="outlined">取消</Button>
+                    <Button onClick={() => setAddDialogOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
                     <Button
                         onClick={handleAddTransaction}
                         variant="contained"
                         disabled={!newTransaction.description || !newTransaction.amount}
                         sx={{ cursor: 'pointer' }}
                     >
-                        添加
+                        {t('transactions.actions.add')}
                     </Button>
                 </DialogActions>
             </Dialog>
