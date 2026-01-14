@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rounded Square Background: Emerald Green (#10B981) -->
+  <rect x="0" y="0" width="512" height="512" rx="100" ry="100" fill="#10B981"/>
+
+  <!-- Bar 1 (Left, Short) -->
+  <rect x="110" y="280" width="80" height="120" rx="12" fill="white"/>
+
+  <!-- Bar 2 (Middle, Medium) -->
+  <rect x="216" y="200" width="80" height="200" rx="12" fill="white"/>
+
+  <!-- Bar 3 (Right, Tall) -->
+  <rect x="322" y="120" width="80" height="280" rx="12" fill="white"/>
+</svg>
