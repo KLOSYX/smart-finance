@@ -115,6 +115,41 @@ export default function Dashboard() {
     }
 
     // Prepare data for charts
+    // Abbreviate long category names for bar chart display
+    const abbreviateCategory = (name: string): string => {
+        const abbrevMap: Record<string, string> = {
+            // English categories - use short forms
+            'Entertainment': 'Entertain',
+            'Food & Dining': 'Food',
+            'Health & Fitness': 'Health',
+            'Housing': 'Housing',
+            'Other': 'Other',
+            'Savings/Investments': 'Savings',
+            'Shopping': 'Shopping',
+            'Transportation': 'Transport',
+            'Travel': 'Travel',
+            'Utilities': 'Utilities',
+            // Chinese categories
+            '娱乐': '娱乐',
+            '餐饮': '餐饮',
+            '健康与健身': '健康',
+            '住房': '住房',
+            '其他': '其他',
+            '储蓄/投资': '储蓄',
+            '购物': '购物',
+            '交通': '交通',
+            '旅行': '旅行',
+            '水电煤': '水电煤',
+            '需要复核': '待核',
+        };
+        return abbrevMap[name] || (name.length > 10 ? name.slice(0, 9) + '…' : name);
+    };
+
+    const barChartData = stats.category_summary.map((item: CategorySummary) => ({
+        ...item,
+        ShortCategory: abbreviateCategory(item.Category),
+    }));
+
     const pieChartData = stats.category_summary.map((item: CategorySummary, index: number) => ({
         id: index,
         value: item.Amount,
@@ -190,23 +225,31 @@ export default function Dashboard() {
                         </Typography>
                         <Box sx={{ flexGrow: 1, width: '100%', cursor: 'pointer' }}>
                             <BarChart
-                                dataset={stats.category_summary}
-                                xAxis={[{
+                                dataset={barChartData}
+                                layout="horizontal"
+                                yAxis={[{
                                     scaleType: 'band',
-                                    dataKey: 'Category',
+                                    dataKey: 'ShortCategory',
                                     tickLabelStyle: {
                                         fontSize: 12,
-                                        fill: colors.text.secondary,
                                     }
+                                }]}
+                                xAxis={[{
+                                    valueFormatter: (value: number) => {
+                                        if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
+                                        if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+                                        return value.toString();
+                                    },
                                 }]}
                                 series={[{
                                     dataKey: 'Amount',
                                     label: t('transactions.table.amount') + ' (¥)',
                                     color: colors.primary.main,
+                                    valueFormatter: (value) => value ? `¥${value.toLocaleString()}` : '',
                                 }]}
                                 onItemClick={handleItemClick}
-                                margin={{ left: 80, bottom: 60, right: 20, top: 20 }}
-                                grid={{ horizontal: true }}
+                                margin={{ left: 70, bottom: 40, right: 80, top: 20 }}
+                                grid={{ vertical: true }}
                             />
                         </Box>
                     </Paper>
@@ -249,7 +292,7 @@ export default function Dashboard() {
                                     },
                                 ]}
                                 onItemClick={handleItemClick}
-                                margin={{ right: 200 }}
+                                margin={{ right: 180, left: 80 }}
                             />
                         </Box>
                     </Paper>
@@ -297,7 +340,7 @@ export default function Dashboard() {
                                             cornerRadius: 6,
                                         },
                                     ]}
-                                    margin={{ right: 200 }}
+                                    margin={{ right: 200, left: 100 }}
                                 />
                             ) : (
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>

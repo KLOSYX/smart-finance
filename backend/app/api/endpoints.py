@@ -270,7 +270,7 @@ def get_stats(db: Session = Depends(get_db)):
 
     # Simple aggregation
     # Filter positive amounts (expenses)
-    expenses = df[df["Amount"] > 0]
+    expenses = df[df["Amount"] > 0].copy()
 
     total = expenses["Amount"].sum()
     cat_summary = (

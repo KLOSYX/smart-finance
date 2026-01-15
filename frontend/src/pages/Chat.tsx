@@ -133,18 +133,20 @@ export default function Chat() {
                         placeholder: t('chat.placeholder'),
                     }}
                     // Persist messages to localStorage
-                    initialChats={(() => {
+                    initialChatsList={(() => {
                         const saved = localStorage.getItem('pro_chat_history');
                         return saved ? JSON.parse(saved) : [];
                     })()}
                     onChatsChange={(chats) => {
                         localStorage.setItem('pro_chat_history', JSON.stringify(chats));
                     }}
+                    locale={language === 'zh' ? 'zh-CN' : 'en-US'}
+                    actionsRender={() => []}
                     // API Integration
-                    request={async (messages) => {
+                    sendMessageRequest={async (messages) => {
                         try {
                             // Extract history (excluding the current user message being sent)
-                            const history = messages.slice(0, -1).map(m => ({
+                            const history = messages.slice(0, -1).map((m: { role?: string; content?: string | unknown }) => ({
                                 role: m.role as 'user' | 'assistant',
                                 content: typeof m.content === 'string' ? m.content : ''
                             }));
@@ -175,11 +177,6 @@ export default function Chat() {
                                         console.log('Stream chunk:', JSON.stringify(text));
 
                                         // Check for tool markers
-                                        // Simple check: splitting by lines to be safe against mixed chunks
-                                        // Ideally we buffer, but for this specific strict backend format,
-                                        // checking if the chunk *contains* the marker is likely enough for V1.
-                                        // The backend sends distinct yields for these messages.
-
                                         if (text.includes("> 🔧 调用工具:")) {
                                             const match = text.match(/> 🔧 调用工具: (.*)/);
                                             console.log('Tool start detected:', match);
@@ -221,15 +218,6 @@ export default function Chat() {
                         avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=smart-finance',
                         title: t('chat.role_ai'),
                         backgroundColor: '#3B82F6',
-                    }}
-                    locale={language === 'zh' ? 'zh-CN' : 'en-US'}
-                    actions={{
-                        render: () => [],
-                        flexConfig: {
-                            gap: 24,
-                            direction: 'horizontal',
-                            justify: 'end',
-                        },
                     }}
                 />
             </Box>
