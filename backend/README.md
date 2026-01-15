@@ -1,25 +1,27 @@
-# AI Financial Assistant
+# AI Financial Assistant Backend
 
-A Streamlit-based web application that automates the classification of monthly credit card statements (PDF) using Large Language Models (LLM).
+The FastAPI-based backend for the Smart Finance application, handling transaction processing, database management, and AI integration.
 
 ## Features
 
-- **PDF Upload**: Support for uploading multiple credit card statement PDFs.
-- **Privacy First**: Automatically masks sensitive information (Phone, Email, Credit Card numbers) before sending data to the LLM.
-- **Automated Classification**: Uses LLM to extract transactions and categorize them into fixed categories (e.g., Food, Transport, Housing).
-- **Human-in-the-Loop**: Interactive table to manually correct categories or transaction details.
-- **Financial Analysis**: Visualizations of expense distribution.
-- **AI Advice**: Generates personalized financial advice based on your spending habits.
-- **Configurable LLM**: compatible with OpenAI API (and other compatible providers).
+- **Robust API**: RESTful endpoints built with FastAPI.
+- **PDF Processing**: Parses credit card statements using `pdfplumber`.
+- **Privacy First**: Automatically masks sensitive information before processing.
+- **AI Analysis**: Uses LangChain and OpenAI Models to classify transactions.
+- **Financial Advice**: Generates personalized financial insights.
+- **Database**: SQLite storage with SQLAlchemy ORM.
 
 ## Setup
 
-1. Install dependencies:
+1. Install dependencies (using uv):
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
-2. Run the application:
+2. Run the development server:
    ```bash
-   streamlit run app.py
+   uv run uvicorn app.main:app --reload --port 8000
    ```
+
+   - API Base URL: `http://localhost:8000`
+   - Interactive Docs: `http://localhost:8000/docs`
