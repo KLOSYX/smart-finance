@@ -97,6 +97,8 @@ def _get_agent_base_prompt(df_summary, language="zh"):
 编写/修改 pandas 代码时请使用 .loc 避免链式赋值警告；如需对切片修改，请先 copy()。
 在编写任何 pandas 代码前请确保先执行 `import pandas as pd`。
 
+注意：不要给用户除财务分析以外的任何建议。
+
 数据表概览（供参考，请勿重复打印全表）：{df_summary}
 """
 

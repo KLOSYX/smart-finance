@@ -53,6 +53,9 @@ export const en = {
             add: 'Add',
             done: 'Done',
             confirm_analyze: 'Confirm & Analyze',
+            delete: 'Delete',
+            edit: 'Edit',
+            save: 'Save',
         },
         dialogs: {
             privacy_title: 'Privacy Review',
@@ -62,6 +65,9 @@ export const en = {
             review_title: 'Transaction Review',
             review_helper: 'The following transactions are marked as "Needs Review". Please check and update their categories.',
             add_title: 'Add Transaction',
+            edit_title: 'Edit Transaction',
+            delete_title: 'Delete Transaction',
+            delete_confirm: 'Are you sure you want to delete this transaction?',
         },
         errors: {
             load: 'Failed to load transactions. Check backend service.',
@@ -70,6 +76,8 @@ export const en = {
             parse: 'Parse failed. Check API config or PDF format.',
             analyze: 'Analysis failed. Please try again later.',
             update_cat: 'Failed to update category',
+            delete: 'Failed to delete transaction.',
+            update: 'Failed to update transaction.',
         },
     },
     settings: {

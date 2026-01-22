@@ -53,6 +53,9 @@ export const zh = {
             add: '添加',
             done: '完成',
             confirm_analyze: '确认并分析',
+            delete: '删除',
+            edit: '编辑',
+            save: '保存',
         },
         dialogs: {
             privacy_title: '隐私审查',
@@ -62,6 +65,9 @@ export const zh = {
             review_title: '交易复核',
             review_helper: '以下交易被标记为"需要复核"，请检查并点击分类标签更新。',
             add_title: '添加交易',
+            edit_title: '编辑交易',
+            delete_title: '删除交易',
+            delete_confirm: '您确定要删除这条记录吗？',
         },
         errors: {
             load: '无法加载交易记录，请检查后端服务。',
@@ -70,6 +76,8 @@ export const zh = {
             parse: '解析失败。请检查 API 配置或 PDF 格式。',
             analyze: '分析失败，请稍后重试。',
             update_cat: '更新分类失败',
+            delete: '删除失败',
+            update: '更新交易失败',
         },
     },
     settings: {

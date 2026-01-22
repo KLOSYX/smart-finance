@@ -49,6 +49,11 @@ export const updateTransaction = async (id: number, data: Partial<Transaction>) 
   return response.data;
 };
 
+export const deleteTransaction = async (id: number) => {
+  const response = await api.delete(`/transactions/${id}`);
+  return response.data;
+};
+
 export const clearAllTransactions = async () => {
   const response = await api.delete('/transactions');
   return response.data;

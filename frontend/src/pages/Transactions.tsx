@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import {
     Box, Button, Typography, Paper, Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, CircularProgress, Alert,
-    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, Chip
+    Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, Chip,
+    Autocomplete, Menu
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import type { GridRenderCellParams } from '@mui/x-data-grid';
 import type { SelectChangeEvent } from '@mui/material';
-import { CloudUpload, FileDownload, Delete, Add, Receipt } from '@mui/icons-material';
-import { getTransactions, parsePdf, analyzeText, updateTransaction, clearAllTransactions, createTransaction } from '../api';
+import { CloudUpload, FileDownload, Delete, Add, Receipt, Edit } from '@mui/icons-material';
+import { getTransactions, parsePdf, analyzeText, updateTransaction, clearAllTransactions, createTransaction, deleteTransaction } from '../api';
 import type { Transaction, TransactionCreate } from '../api';
 import { colors } from '../theme';
 import { isAxiosError } from 'axios';
@@ -51,10 +52,21 @@ export default function Transactions() {
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Dialog states
+    const [contextMenu, setContextMenu] = useState<{
+        mouseX: number;
+        mouseY: number;
+        rowId: number;
+    } | null>(null);
+    const [editMode, setEditMode] = useState(false);
+    const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
+
+    // Dialog states
     const [reviewOpen, setReviewOpen] = useState(false);
     const [reviewText, setReviewText] = useState('');
     const [currentFilename, setCurrentFilename] = useState('');
     const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
     const [needsReviewOpen, setNeedsReviewOpen] = useState(false);
     const [reviewTransactions, setReviewTransactions] = useState<Transaction[]>([]);
     const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -94,22 +106,46 @@ export default function Transactions() {
         }
     };
 
-    const handleAddTransaction = async () => {
+    const handleSaveTransaction = async () => {
         try {
-            await createTransaction(newTransaction);
+            if (editMode && selectedTransactionId) {
+                await updateTransaction(selectedTransactionId, newTransaction);
+            } else {
+                await createTransaction(newTransaction);
+            }
             setAddDialogOpen(false);
-            setNewTransaction({
-                date: new Date().toISOString().split('T')[0],
-                description: '',
-                amount: 0,
-                category: language === 'en' ? 'Other' : '其他',
-                source: 'manual'
-            });
+            resetForm();
             const data = await getTransactions();
             setTransactions(data);
         } catch (error) {
             console.error(error);
-            setErrorMsg(t('transactions.errors.add'));
+            setErrorMsg(editMode ? t('transactions.errors.update') : t('transactions.errors.add'));
+        }
+    };
+
+    const resetForm = () => {
+        setNewTransaction({
+            date: new Date().toISOString().split('T')[0],
+            description: '',
+            amount: 0,
+            category: language === 'en' ? 'Other' : '其他',
+            source: 'manual'
+        });
+        setEditMode(false);
+        setSelectedTransactionId(null);
+    };
+
+    const handleDeleteTransaction = async () => {
+        if (!transactionToDelete) return;
+        try {
+            await deleteTransaction(transactionToDelete);
+            setDeleteConfirmOpen(false);
+            setTransactionToDelete(null);
+            const data = await getTransactions();
+            setTransactions(data);
+        } catch (error) {
+            console.error(error);
+            setErrorMsg(t('transactions.errors.delete'));
         }
     };
 
@@ -198,6 +234,49 @@ export default function Transactions() {
         document.body.removeChild(link);
     };
 
+    const handleRowContextMenu = (event: React.MouseEvent, id: number) => {
+        event.preventDefault(); // Check if needed, usually required for custom context menu
+        setContextMenu(
+            contextMenu === null
+                ? {
+                    mouseX: event.clientX + 2,
+                    mouseY: event.clientY - 6,
+                    rowId: id,
+                }
+                : null,
+        );
+    };
+
+    const handleCloseContextMenu = () => {
+        setContextMenu(null);
+    };
+
+    const handleEditClick = () => {
+        handleCloseContextMenu();
+        const transaction = transactions.find(t => t.id === contextMenu?.rowId);
+        if (transaction) {
+            setNewTransaction({
+                date: new Date(transaction.date).toISOString().split('T')[0],
+                description: transaction.description,
+                amount: transaction.amount,
+                category: transaction.category,
+                source: transaction.source,
+                card_last_four: transaction.card_last_four
+            });
+            setSelectedTransactionId(transaction.id);
+            setEditMode(true);
+            setAddDialogOpen(true);
+        }
+    };
+
+    const handleDeleteClick = () => {
+        handleCloseContextMenu();
+        if (contextMenu?.rowId) {
+            setTransactionToDelete(contextMenu.rowId);
+            setDeleteConfirmOpen(true);
+        }
+    };
+
     return (
         <Box>
             {/* Header */}
@@ -211,7 +290,10 @@ export default function Transactions() {
                     <Button
                         variant="contained"
                         startIcon={<Add />}
-                        onClick={() => setAddDialogOpen(true)}
+                        onClick={() => {
+                            resetForm();
+                            setAddDialogOpen(true);
+                        }}
                         sx={{ cursor: 'pointer' }}
                     >
                         {t('transactions.actions.manual_add')}
@@ -331,6 +413,14 @@ export default function Transactions() {
                     }}
                     pageSizeOptions={[10, 25, 50]}
                     disableRowSelectionOnClick
+                    slotProps={{
+                        row: {
+                            onContextMenu: (e) => {
+                                handleRowContextMenu(e, Number(e.currentTarget.getAttribute('data-id')));
+                            },
+                            style: { cursor: 'context-menu' },
+                        },
+                    }}
                     sx={{
                         border: 0,
                         '& .MuiDataGrid-cell:focus': { outline: 'none' },
@@ -338,6 +428,26 @@ export default function Transactions() {
                     }}
                 />
             </Paper>
+
+            <Menu
+                open={contextMenu !== null}
+                onClose={handleCloseContextMenu}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                    contextMenu !== null
+                        ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
+                        : undefined
+                }
+            >
+                <MenuItem onClick={handleEditClick}>
+                    <Edit fontSize="small" sx={{ mr: 1 }} />
+                    {t('transactions.actions.edit')}
+                </MenuItem>
+                <MenuItem onClick={handleDeleteClick} sx={{ color: 'error.main' }}>
+                    <Delete fontSize="small" sx={{ mr: 1 }} />
+                    {t('transactions.actions.delete')}
+                </MenuItem>
+            </Menu>
 
             {/* Review Dialog */}
             <Dialog open={reviewOpen} onClose={() => setReviewOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
@@ -381,6 +491,18 @@ export default function Transactions() {
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setClearConfirmOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
                     <Button onClick={handleClearAll} variant="contained" color="error" sx={{ cursor: 'pointer' }}>{t('transactions.actions.confirm')}</Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Delete Single Confirmation */}
+            <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} PaperProps={{ sx: { borderRadius: 3 } }}>
+                <DialogTitle>{t('transactions.dialogs.delete_title')}</DialogTitle>
+                <DialogContent>
+                    <Typography>{t('transactions.dialogs.delete_confirm')}</Typography>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setDeleteConfirmOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
+                    <Button onClick={handleDeleteTransaction} variant="contained" color="error" sx={{ cursor: 'pointer' }}>{t('transactions.actions.delete')}</Button>
                 </DialogActions>
             </Dialog>
 
@@ -433,9 +555,9 @@ export default function Transactions() {
                 </DialogActions>
             </Dialog>
 
-            {/* Add Transaction Dialog */}
+            {/* Add/Edit Transaction Dialog */}
             <Dialog open={addDialogOpen} onClose={() => setAddDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-                <DialogTitle>{t('transactions.dialogs.add_title')}</DialogTitle>
+                <DialogTitle>{editMode ? t('transactions.dialogs.edit_title') : t('transactions.dialogs.add_title')}</DialogTitle>
                 <DialogContent>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
                         <TextField
@@ -459,26 +581,35 @@ export default function Transactions() {
                             value={newTransaction.amount}
                             onChange={(e) => setNewTransaction({ ...newTransaction, amount: parseFloat(e.target.value) || 0 })}
                         />
-                        <TextField
-                            select
-                            label={t('transactions.table.category')}
-                            fullWidth
+                        <Autocomplete
+                            freeSolo
+                            options={categories}
                             value={newTransaction.category}
-                            onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
-                        >
-                            {categories.map((cat) => <MenuItem key={cat} value={cat}>{cat}</MenuItem>)}
-                        </TextField>
+                            onChange={(event, newValue) => {
+                                setNewTransaction({ ...newTransaction, category: newValue || '' });
+                            }}
+                            onInputChange={(event, newInputValue) => {
+                                setNewTransaction({ ...newTransaction, category: newInputValue });
+                            }}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    label={t('transactions.table.category')}
+                                    fullWidth
+                                />
+                            )}
+                        />
                     </Box>
                 </DialogContent>
                 <DialogActions sx={{ p: 2 }}>
                     <Button onClick={() => setAddDialogOpen(false)} variant="outlined">{t('transactions.actions.cancel')}</Button>
                     <Button
-                        onClick={handleAddTransaction}
+                        onClick={handleSaveTransaction}
                         variant="contained"
                         disabled={!newTransaction.description || !newTransaction.amount}
                         sx={{ cursor: 'pointer' }}
                     >
-                        {t('transactions.actions.add')}
+                        {editMode ? t('transactions.actions.save') : t('transactions.actions.add')}
                     </Button>
                 </DialogActions>
             </Dialog>

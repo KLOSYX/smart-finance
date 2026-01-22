@@ -226,6 +226,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             "Amount": t.amount,
             "Category": t.category,
             "Source": t.source,
+            "CardLastFour": t.card_last_four,
         }
         for t in transactions
     ]
