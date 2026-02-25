@@ -77,11 +77,19 @@ export default function Chat() {
                     position: 'relative', // For absolute positioning of status
                     '& .ant-pro-chat-list': {
                         paddingBottom: '20px',
+                        overflowX: 'hidden',
+                    },
+                    // Ensure list items don't overflow
+                    '& .ant-pro-chat-list-item': {
+                        maxWidth: '100%',
+                        overflow: 'hidden',
                     },
                     // Customize Message Bubbles
                     '& .ant-pro-chat-list-item-message-content': {
                         padding: '12px 16px',
                         borderRadius: '12px',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
                     },
                     // User Message (Right)
                     '& .ant-pro-chat-list-item-right .ant-pro-chat-list-item-message-content': {

@@ -10,6 +10,8 @@ export const en = {
         title: 'Financial Overview',
         upload_pdf: 'Upload Bill PDF',
         total_expense: 'Total Expenses',
+        gross_expense: 'Gross Spend (before refunds)',
+        refund_total: 'Refunds / Offsets',
         expense_trend: 'Expense Trend',
         category_dist: 'Category Distribution',
         card_dist: 'Card Distribution',

@@ -28,7 +28,9 @@ interface CardSummary {
 }
 
 interface Stats {
-    total_expense: number;
+    total_expense: number; // net expense (expenses - refunds)
+    gross_expense?: number; // total positive amounts
+    refund_total?: number; // negative numbers (refunds)
     category_summary: CategorySummary[];
     card_summary: CardSummary[];
 }
@@ -159,6 +161,21 @@ export default function Dashboard() {
                             <Typography variant="h3" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
                                 ¥{stats.total_expense.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </Typography>
+                            {(stats.refund_total || stats.gross_expense) && (
+                                <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
+                                    {stats.gross_expense !== undefined && (
+                                        <>
+                                            {t('dashboard.gross_expense')}: ¥{stats.gross_expense.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </>
+                                    )}
+                                    {stats.refund_total !== undefined && stats.refund_total !== 0 && (
+                                        <>
+                                            {stats.gross_expense !== undefined ? ' · ' : ''}
+                                            {t('dashboard.refund_total')}: ¥{Math.abs(stats.refund_total).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </>
+                                    )}
+                                </Typography>
+                            )}
                         </CardContent>
                     </Card>
                 </Grid>

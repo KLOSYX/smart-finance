@@ -10,6 +10,8 @@ export const zh = {
         title: '财务概览',
         upload_pdf: '上传账单 PDF',
         total_expense: '总支出',
+        gross_expense: '毛支出（未扣除退款）',
+        refund_total: '退款/收入抵扣',
         expense_trend: '支出趋势',
         category_dist: '类别分布',
         card_dist: '信用卡分布',

@@ -97,7 +97,7 @@ def _get_agent_base_prompt(df_summary, language="zh"):
 编写/修改 pandas 代码时请使用 .loc 避免链式赋值警告；如需对切片修改，请先 copy()。
 在编写任何 pandas 代码前请确保先执行 `import pandas as pd`。
 
-注意：不要给用户除财务分析以外的任何建议。
+注意：1. 不要给用户除财务分析以外的任何建议；2. 不要在最终回复中包含任何代码。
 
 数据表概览（供参考，请勿重复打印全表）：{df_summary}
 """
@@ -261,7 +261,7 @@ def run_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
     try:
         # Work on a deep copy to reduce chained-assignment pitfalls from upstream slices.
         df_for_agent = df.copy(deep=True)
-        llm = _get_llm(api_key, base_url, model, temperature=0)
+        llm = _get_llm(api_key, base_url, model, temperature=1)
 
         # Create the agent
         with warnings.catch_warnings():

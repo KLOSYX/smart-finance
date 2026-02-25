@@ -259,9 +259,15 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
 
 @router.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
+    """Return net expense statistics.
+
+    总额现在使用净支出（支出减去退款/收入），以便信用卡账单的退款可以抵扣。
+    饼图/柱状图仍然只展示净额为正的类别/卡片，避免出现负值导致图表异常。
+    """
+
     transactions = db.query(TransactionModel).all()
     if not transactions:
-        return {"total_expense": 0, "category_summary": []}
+        return {"total_expense": 0, "category_summary": [], "card_summary": []}
 
     data = [
         {"Amount": t.amount, "Category": t.category, "CardLastFour": t.card_last_four}
@@ -269,29 +275,25 @@ def get_stats(db: Session = Depends(get_db)):
     ]
     df = pd.DataFrame(data)
 
-    # Simple aggregation
-    # Filter positive amounts (expenses)
-    expenses = df[df["Amount"] > 0].copy()
+    # Net totals include negative amounts (refunds) so they offset expenses
+    net_total = df["Amount"].sum()
 
-    total = expenses["Amount"].sum()
-    cat_summary = (
-        expenses.groupby("Category")["Amount"]
-        .sum()
-        .reset_index()
-        .to_dict(orient="records")
-    )
+    # Aggregate by category/card; keep only positive net amounts for chart friendliness
+    cat_summary_df = df.groupby("Category")["Amount"].sum().reset_index()
+    cat_summary_df = cat_summary_df[cat_summary_df["Amount"] > 0]
 
-    # Card Summary
-    expenses["CardLastFour"] = expenses["CardLastFour"].fillna("Unknown")
-    card_summary = (
-        expenses.groupby("CardLastFour")["Amount"]
-        .sum()
-        .reset_index()
-        .to_dict(orient="records")
-    )
+    df["CardLastFour"] = df["CardLastFour"].fillna("Unknown")
+    card_summary_df = df.groupby("CardLastFour")["Amount"].sum().reset_index()
+    card_summary_df = card_summary_df[card_summary_df["Amount"] > 0]
+
+    # Optional extra fields for transparency
+    gross_expense = df[df["Amount"] > 0]["Amount"].sum()
+    refunds = df[df["Amount"] < 0]["Amount"].sum()  # negative or zero
 
     return {
-        "total_expense": total,
-        "category_summary": cat_summary,
-        "card_summary": card_summary,
+        "total_expense": net_total,
+        "gross_expense": gross_expense,
+        "refund_total": refunds,
+        "category_summary": cat_summary_df.to_dict(orient="records"),
+        "card_summary": card_summary_df.to_dict(orient="records"),
     }
