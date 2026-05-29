@@ -44,3 +44,4 @@ backend/sql_app.db
 # Agent / Environment
 .agent/
 .shared/
+.worktrees/
