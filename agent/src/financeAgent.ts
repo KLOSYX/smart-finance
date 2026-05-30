@@ -15,6 +15,7 @@ import {
   summarizeTransactions,
   topMerchants,
 } from './financeTools.js';
+import { createPythonCalculationTool } from './pythonTool.js';
 import type { AgentRequest, AgentStreamEvent } from './types.js';
 
 const PROVIDER = 'smart-finance-openai-compatible';
@@ -76,7 +77,23 @@ function createFinanceTools(request: AgentRequest) {
         investments: params.investments ?? request.financialContext.investments,
       })),
     }),
+    createPythonCalculationTool({
+      transactions: request.transactions,
+      monthlyIncome: request.financialContext.monthlyIncome,
+      investments: request.financialContext.investments,
+    }),
   ];
+}
+
+export function getFinanceSystemPrompt(): string {
+  return [
+    'You are a personal finance analysis assistant.',
+    'All money amounts are Chinese yuan (CNY, 人民币, ¥), never US dollars.',
+    'Use the deterministic finance tools for transaction facts before answering.',
+    'Use execute_python for arithmetic, ratios, projections, budget scenarios, and any calculation that could be error-prone.',
+    'Answer concisely in the user language.',
+    'Do not invent transactions or balances.',
+  ].join('\n');
 }
 
 function buildPrompt(request: AgentRequest): string {
@@ -130,12 +147,7 @@ export async function* runFinanceAgent(request: AgentRequest): AsyncGenerator<Ag
   const loader = new DefaultResourceLoader({
     cwd: process.cwd(),
     agentDir: process.cwd(),
-    systemPromptOverride: () => [
-      'You are a personal finance analysis assistant.',
-      'Use the provided deterministic tools for transaction facts before answering.',
-      'Answer concisely in the user language.',
-      'Do not invent transactions or balances.',
-    ].join('\n'),
+    systemPromptOverride: getFinanceSystemPrompt,
   });
   await loader.reload();
 

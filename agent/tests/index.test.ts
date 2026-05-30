@@ -1,5 +1,6 @@
 import { Readable, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { getFinanceSystemPrompt } from '../src/financeAgent.js';
 import { runCli } from '../src/index.js';
 import type { AgentRequest, AgentStreamEvent } from '../src/types.js';
 
@@ -28,6 +29,11 @@ function captureWritable() {
 }
 
 describe('agent CLI', () => {
+  it('tells the model all money amounts are Chinese yuan', () => {
+    expect(getFinanceSystemPrompt()).toContain('Chinese yuan');
+    expect(getFinanceSystemPrompt()).toContain('人民币');
+  });
+
   it('reads a JSON request and writes JSONL events', async () => {
     const stdout = captureWritable();
 
