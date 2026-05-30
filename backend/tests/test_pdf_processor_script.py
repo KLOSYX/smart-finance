@@ -1,7 +1,12 @@
 from app.services.pdf_processor import anonymize_text
 
 
-def test_anonymize():
+def test_anonymize(monkeypatch):
+    def fail():
+        raise RuntimeError("skip model in unit test")
+
+    monkeypatch.setattr("app.services.privacy_filter._get_openai_redactor", fail)
+
     sample_text = """
     Contact me at test.user@example.com or call +1-555-0199-8888.
     My local number is 123-456-7890.

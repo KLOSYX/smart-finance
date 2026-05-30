@@ -22,7 +22,9 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
             os.path.dirname(__file__), "dummy_statement.pdf"
         )
 
-    def test_pdf_extraction_and_anonymization(self):
+    @patch("app.services.privacy_filter._get_openai_redactor")
+    def test_pdf_extraction_and_anonymization(self, mock_redactor):
+        mock_redactor.side_effect = RuntimeError("skip model in unit test")
         with open(self.dummy_pdf_path, "rb") as f:
             text = extract_text_from_pdf(f)
 
@@ -44,7 +46,9 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("4000-1234-5678-9010", clean_text)
         self.assertIn("[CC_REDACTED]", clean_text)
 
-    def test_chinese_name_redaction(self):
+    @patch("app.services.privacy_filter._get_openai_redactor")
+    def test_chinese_name_redaction(self, mock_redactor):
+        mock_redactor.side_effect = RuntimeError("skip model in unit test")
         text = """
         姓名: 张三
         户名：李四
