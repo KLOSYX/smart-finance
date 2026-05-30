@@ -1,3 +1,5 @@
+import re
+
 import pdfplumber
 from artifex import Artifex
 
@@ -28,6 +30,22 @@ def extract_text_from_pdf(file_stream):
 _anonymizer = None
 
 
+def _deterministic_redact(text: str) -> str:
+    text = re.sub(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "[EMAIL_REDACTED]",
+        text,
+    )
+    text = re.sub(r"\b(?:\d[ -]?){13,19}\b", "[CC_REDACTED]", text)
+    text = re.sub(r"\b\d{3}[- ]\d{4}[- ]\d{4}\b", "[PHONE_REDACTED]", text)
+    text = re.sub(
+        r"((?:姓名|户名|客户|持卡人)\s*[:：]\s*)[\u4e00-\u9fff]{2,4}",
+        r"\1[NAME_REDACTED]",
+        text,
+    )
+    return text
+
+
 def get_anonymizer():
     global _anonymizer
     if _anonymizer is None:
@@ -52,8 +70,12 @@ def anonymize_text(text):
         str: The anonymized text.
     """
     try:
+        text = _deterministic_redact(text)
         ta = get_anonymizer()
-        return ta(text)
+        anonymized = ta(text)
+        if isinstance(anonymized, list):
+            anonymized = "\n".join(str(item) for item in anonymized)
+        return _deterministic_redact(str(anonymized))
     except Exception as e:
         print(f"Anonymization failed: {e}")
-        return text  # Return original text on failure to avoid complete breakage
+        return _deterministic_redact(text)

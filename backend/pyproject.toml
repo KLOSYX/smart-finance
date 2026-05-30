@@ -14,7 +14,6 @@ dependencies = [
     "openai>=1.12.0",
     "langchain>=1.1.2",
     "langchain-openai>=1.1.0",
-    "langchain-experimental>=0.4.0",
     "fastapi>=0.127.0",
     "uvicorn>=0.40.0",
     "sqlalchemy>=2.0.44",

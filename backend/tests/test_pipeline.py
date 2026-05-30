@@ -7,7 +7,12 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.services.pdf_processor import extract_text_from_pdf, anonymize_text
-from app.services.llm_client import analyze_transactions, generate_financial_advice
+from app.services.llm_client import (
+    _dataframe_to_transactions,
+    analyze_transactions,
+    generate_financial_advice,
+    stream_chat_with_data,
+)
 
 
 class TestPipeline(unittest.IsolatedAsyncioTestCase):
@@ -90,6 +95,93 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
 
         advice = generate_financial_advice(df, "fake-key", "fake-url", "gpt-3.5")
         self.assertEqual(advice, "Please use agentic_financial_advice instead.")
+
+    def test_dataframe_to_transactions_for_pi_agent(self):
+        import pandas as pd
+
+        df = pd.DataFrame(
+            [
+                {
+                    "Date": pd.Timestamp("2026-05-01 12:30:00"),
+                    "Description": "Cafe",
+                    "Amount": 12.5,
+                    "Category": "Food",
+                    "Source": "statement.pdf",
+                    "CardLastFour": "1234",
+                },
+                {
+                    "Date": pd.NaT,
+                    "Description": None,
+                    "Amount": None,
+                    "Category": None,
+                    "Source": None,
+                    "CardLastFour": None,
+                },
+            ]
+        )
+
+        self.assertEqual(
+            _dataframe_to_transactions(df),
+            [
+                {
+                    "date": "2026-05-01T12:30:00",
+                    "description": "Cafe",
+                    "amount": 12.5,
+                    "category": "Food",
+                    "source": "statement.pdf",
+                    "cardLastFour": "1234",
+                },
+                {
+                    "date": None,
+                    "description": "",
+                    "amount": 0.0,
+                    "category": "Other",
+                    "source": None,
+                    "cardLastFour": None,
+                },
+            ],
+        )
+
+    @patch("app.services.llm_client.stream_pi_agent_chat")
+    async def test_stream_chat_with_data_uses_pi_agent(self, mock_stream):
+        import pandas as pd
+
+        async def fake_stream(**kwargs):
+            yield f"rows={len(kwargs['transactions'])}"
+
+        mock_stream.side_effect = fake_stream
+        df = pd.DataFrame(
+            [
+                {
+                    "Date": "2026-05-01",
+                    "Description": "Cafe",
+                    "Amount": 12.5,
+                    "Category": "Food",
+                    "Source": "statement.pdf",
+                    "CardLastFour": "1234",
+                }
+            ]
+        )
+
+        chunks = [
+            chunk
+            async for chunk in stream_chat_with_data(
+                [{"role": "user", "content": "hi"}],
+                "summary",
+                df,
+                "key",
+                "https://example.test/v1",
+                "model",
+                1000,
+                100,
+                "en",
+            )
+        ]
+
+        self.assertEqual(chunks, ["rows=1"])
+        mock_stream.assert_called_once()
+        self.assertEqual(mock_stream.call_args.kwargs["message"], "summary")
+        self.assertEqual(mock_stream.call_args.kwargs["monthly_income"], 1000)
 
 
 if __name__ == "__main__":
