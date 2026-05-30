@@ -27,13 +27,14 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 
 - **前端**: React, TypeScript, Vite, Ant Design Pro Components, MUI
 - **后端**: Python, FastAPI, Pandas, SQLAlchemy
-- **AI 集成**: LangChain, OpenRouter (支持多种 LLM)
+- **Chat Agent 运行时**: `agent/` 目录下的 Node.js sidecar，基于 `@earendil-works/pi-coding-agent`
+- **AI 集成**: LangChain 用于 PDF 交易抽取，OpenRouter 兼容模型用于聊天 Agent
 
 ## 快速开始
 
 ### 前置要求
 
-- Node.js (v18+)
+- Node.js (建议 v22.19+，用于 pi-agent 运行时)
 - Python (v3.10+)
 - `uv` (Python 包管理器)
 
@@ -57,6 +58,12 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
     npm install
     ```
 
+4.  **设置 Chat Agent**
+    ```bash
+    cd agent
+    npm install
+    ```
+
 ### 运行应用
 
 使用提供的启动脚本：
@@ -64,6 +71,8 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 ```bash
 ./start.sh
 ```
+
+`start.sh` 会启动 FastAPI 后端和 Vite 前端。如果 `agent/node_modules` 不存在，会先安装 Node sidecar 依赖。`/api/chat` 现在通过 `agent/` 下的 pi-agent sidecar 流式响应，不再使用旧的 pandas DataFrame agent。
 
 ### 配置
 
