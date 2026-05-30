@@ -109,7 +109,7 @@ export const sendChatMessage = async (message: string, history: { role: 'user' |
 };
 
 export const sendChatMessageStream = async (message: string, history: { role: 'user' | 'assistant', content: string }[], language: string = 'zh') => {
-  const response = await fetch('http://127.0.0.1:8000/api/chat', {
+  const response = await fetch('http://127.0.0.1:8008/api/chat', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

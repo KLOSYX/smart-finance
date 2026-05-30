@@ -12,7 +12,7 @@ trap cleanup SIGINT
 
 echo "Starting Backend (FastAPI)..."
 cd backend
-uv run uvicorn app.main:app --reload --port 8000 &
+uv run uvicorn app.main:app --reload --port 8008 &
 BACKEND_PID=$!
 cd ..
 
@@ -23,7 +23,7 @@ FRONTEND_PID=$!
 cd ..
 
 echo "Servers are running."
-echo "Backend: http://localhost:8000"
+echo "Backend: http://localhost:8008"
 echo "Frontend: http://localhost:5173"
 echo "Press Ctrl+C to stop."
 
