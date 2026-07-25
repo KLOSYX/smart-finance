@@ -1,5 +1,4 @@
 import datetime
-import warnings
 import asyncio
 
 import pandas as pd
@@ -8,7 +7,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_experimental.agents import create_pandas_dataframe_agent
+
+from app.services.pi_agent_client import stream_pi_agent_chat
 
 CATEGORIES = [
     "住房",
@@ -252,69 +252,68 @@ def _extract_final_answer(text):
     return text[idx:].strip()
 
 
+def _nullable_string(value):
+    if value is None or pd.isna(value):
+        return None
+    return str(value)
+
+
+def _date_to_iso(value):
+    if value is None or pd.isna(value):
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    try:
+        parsed = pd.to_datetime(value)
+    except Exception:
+        return str(value)
+    if pd.isna(parsed):
+        return None
+    return parsed.isoformat()
+
+
+def _dataframe_to_transactions(df):
+    """
+    Convert the chat DataFrame into the JSON shape expected by the Node pi-agent.
+    """
+    transactions = []
+    for row in df.to_dict(orient="records"):
+        amount = row.get("Amount", 0)
+        if amount is None or pd.isna(amount):
+            amount = 0
+        description = row.get("Description")
+        category = row.get("Category")
+        transactions.append(
+            {
+                "date": _date_to_iso(row.get("Date")),
+                "description": ""
+                if description is None or pd.isna(description)
+                else str(description),
+                "amount": float(amount),
+                "category": "Other"
+                if category is None or pd.isna(category)
+                else str(category),
+                "source": _nullable_string(row.get("Source")),
+                "cardLastFour": _nullable_string(row.get("CardLastFour")),
+            }
+        )
+    return transactions
+
+
 def run_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
     """
-    Pure executor for LangChain's Pandas DataFrame Agent.
+    Deprecated compatibility wrapper.
     """
-    print("DEBUG: Executing LangChain Pandas Agent...")
-
-    try:
-        # Work on a deep copy to reduce chained-assignment pitfalls from upstream slices.
-        df_for_agent = df.copy(deep=True)
-        llm = _get_llm(api_key, base_url, model, temperature=1)
-
-        # Create the agent
-        with warnings.catch_warnings():
-            # Silence SettingWithCopyWarning that can surface from LLM-generated code.
-            warnings.simplefilter("ignore", pd.errors.SettingWithCopyWarning)
-
-            agent = create_pandas_dataframe_agent(
-                llm,
-                df_for_agent,
-                verbose=True,
-                agent_type="openai-tools",
-                allow_dangerous_code=True,
-                max_iterations=max_turns,
-                handle_parsing_errors=True,
-            )
-
-        print(f"DEBUG: Invoking Agent with query: {query[:50]}...")
-        response = agent.invoke(query)
-
-        output = response.get("output", "Agent failed to generate output.")
-        return _extract_final_answer(output)
-
-    except Exception as e:
-        print(f"Error running LangChain Agent: {e}")
-        return f"Agent Error: {e}. Please try a different model."
+    return "Please use agentic_financial_advice instead."
 
 
 def agentic_financial_advice(
     df, api_key, base_url, model, monthly_income=0, investments=0
 ):
     """
-    Wrapper for the autonomous agent to generate financial advice.
+    Deprecated compatibility wrapper.
     """
-    df_summary = _summarize_dataframe(df)
-    context_info = _format_financial_context(monthly_income, investments)
-    base_prompt = _get_agent_base_prompt(df_summary)
-
-    full_prompt = f"""
-{base_prompt}
-
-任务目标：基于提供的财务数据提供一份全面的财务健康报告和可操作的建议。
-财务背景：{context_info}
-
-分析步骤要求：
-1. 识别支出排名前几位的类别和商户。
-2. 分析支出趋势（例如：周末与工作日、重复性账单）。
-3. 计算储蓄率（如果提供了收入信息）并评估财务健康状况。
-4. 检测任何异常支出。
-
-请给出 3-5 条具体建议。
-"""
-
-    return run_autonomous_agent(df, full_prompt, api_key, base_url, model)
+    return "Please use agentic_financial_advice instead."
 
 
 def generate_financial_advice(
@@ -330,70 +329,9 @@ def generate_financial_advice(
 
 async def stream_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
     """
-    Streaming executor for LangChain's Pandas DataFrame Agent.
-    Yields chunks of the final answer.
+    Deprecated compatibility wrapper.
     """
-    print("DEBUG: Executing LangChain Pandas Agent (Streaming)...")
-
-    try:
-        # Work on a deep copy
-        df_for_agent = df.copy(deep=True)
-        llm = _get_llm(api_key, base_url, model, temperature=0)
-
-        # Create the agent
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", pd.errors.SettingWithCopyWarning)
-            agent = create_pandas_dataframe_agent(
-                llm,
-                df_for_agent,
-                verbose=True,
-                agent_type="openai-tools",
-                allow_dangerous_code=True,
-                max_iterations=max_turns,
-                handle_parsing_errors=True,
-            )
-
-        print(f"DEBUG: Streaming Agent with query: {query[:50]}...")
-
-        # Use astream_events to get granular updates
-        # We perform a simple filter: only yield chunks from the final 'on_chat_model_stream'
-        # or similar events that represent the final text output.
-        # Alternatively, using agent.astream() with stream_mode="values" is often simpler for final output.
-        # But 'openai-tools' agents are complex. Let's try agent.astream() which usually yields Input/Output dicts.
-        # For actual token streaming, we need to iterate over the 'messages' from appropriate events.
-
-        async for chunk in agent.astream_events({"input": query}, version="v2"):
-            event = chunk["event"]
-
-            # Debug: Log all events to understand structure (可以之后删除)
-            if "tool" in event.lower():
-                print(
-                    f"DEBUG TOOL EVENT: {event} | name={chunk.get('name')} | data keys={list(chunk.get('data', {}).keys())}"
-                )
-
-            # Tool Start
-            if event == "on_tool_start":
-                tool_name = chunk.get("name", "unknown")
-                print(f"DEBUG: Yielding tool start for: {tool_name}")
-                yield f"\n> 🔧 调用工具: {tool_name}\n"
-
-            # Tool End
-            elif event == "on_tool_end":
-                tool_name = chunk.get("name", "unknown")
-                print(f"DEBUG: Yielding tool end for: {tool_name}")
-                yield f"\n> ✅ 工具 {tool_name} 执行完毕\n"
-
-            # 'on_chat_model_stream' gives us tokens from the LLM
-            elif event == "on_chat_model_stream":
-                data = chunk["data"]
-                if "chunk" in data:
-                    content = data["chunk"].content
-                    if content:
-                        yield content
-
-    except Exception as e:
-        print(f"Error running LangChain Agent (Stream): {e}")
-        yield f"Agent Error: {e}. Please try a different model."
+    yield "Please use stream_chat_with_data instead."
 
 
 async def stream_chat_with_data(
@@ -408,39 +346,17 @@ async def stream_chat_with_data(
     language="zh",
 ):
     """
-    Handles chat interaction using the LangChain Agent with Streaming.
+    Handles chat interaction using the Node pi-agent sidecar.
     """
-    df_summary = _summarize_dataframe(df)
-    base_prompt = _get_agent_base_prompt(df_summary, language)
-    fin_context = _format_financial_context(monthly_income, investments)
-
-    history_str = ""
-    if history:
-        history_str = "Dialog History:\n" if language == "en" else "对话历史：\n"
-        for msg in history[-5:]:
-            role = (
-                ("User" if msg["role"] == "user" else "AI")
-                if language == "en"
-                else ("用户" if msg["role"] == "user" else "AI")
-            )
-            history_str += f"{role}: {msg['content']}\n"
-
-    # Keep prompt prompt structure in Chinese, just adapt the language requirement
-    full_prompt = f"""
-{base_prompt}
-
-{history_str}
-财务背景：{fin_context}
-
-当前用户问题："{current_query}"
-
-任务要求：
-1. 如果问题是闲聊，请礼貌地回答。
-2. 如果需要数据，请分析 DataFrame `df` 并结合财务背景给出分析结论。
-3. 如果需要进行计算，请调用 pandas 工具。
-"""
-    # Delegate to the streaming executor
-    async for token in stream_autonomous_agent(
-        df, full_prompt, api_key, base_url, model
+    async for token in stream_pi_agent_chat(
+        message=current_query,
+        history=history or [],
+        transactions=_dataframe_to_transactions(df),
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        monthly_income=monthly_income,
+        investments=investments,
+        language=language,
     ):
         yield token

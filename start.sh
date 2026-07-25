@@ -10,6 +10,13 @@ cleanup() {
 # Trap SIGINT (Ctrl+C)
 trap cleanup SIGINT
 
+if [ ! -d "agent/node_modules" ]; then
+    echo "Installing Agent dependencies..."
+    cd agent
+    npm install
+    cd ..
+fi
+
 echo "Starting Backend (FastAPI)..."
 cd backend
 uv run uvicorn app.main:app --reload --port 8008 &

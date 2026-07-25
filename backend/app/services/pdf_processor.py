@@ -1,5 +1,8 @@
 import pdfplumber
-from artifex import Artifex
+
+from app.services.privacy_filter import anonymize_text
+
+__all__ = ["anonymize_text", "extract_text_from_pdf"]
 
 
 def extract_text_from_pdf(file_stream):
@@ -23,37 +26,3 @@ def extract_text_from_pdf(file_stream):
         return f"Error reading PDF: {str(e)}"
 
     return text
-
-
-_anonymizer = None
-
-
-def get_anonymizer():
-    global _anonymizer
-    if _anonymizer is None:
-        try:
-            print("Initializing Artifex text anonymization model...")
-            _anonymizer = Artifex().text_anonymization
-            print("Artifex model initialized.")
-        except Exception as e:
-            print(f"Error initializing Artifex: {e}")
-            raise e
-    return _anonymizer
-
-
-def anonymize_text(text):
-    """
-    Anonymizes sensitive information using Artifex library.
-
-    Args:
-        text (str): The original text.
-
-    Returns:
-        str: The anonymized text.
-    """
-    try:
-        ta = get_anonymizer()
-        return ta(text)
-    except Exception as e:
-        print(f"Anonymization failed: {e}")
-        return text  # Return original text on failure to avoid complete breakage

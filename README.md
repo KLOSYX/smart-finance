@@ -27,13 +27,14 @@ Beyond simple charts, our AI Agent acts as your personal CFO:
 
 - **Frontend**: React, TypeScript, Vite, Ant Design Pro Components, MUI
 - **Backend**: Python, FastAPI, Pandas, SQLAlchemy
-- **AI Integration**: LangChain, OpenRouter (supporting various LLMs)
+- **Chat Agent Runtime**: Node.js sidecar in `agent/`, powered by `@earendil-works/pi-coding-agent`
+- **AI Integration**: LangChain for PDF transaction extraction, OpenRouter-compatible chat models for the agent
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18+)
+- Node.js (v22.19+ recommended for the pi-agent runtime)
 - Python (v3.10+)
 - `uv` (Python package manager)
 
@@ -57,6 +58,12 @@ Beyond simple charts, our AI Agent acts as your personal CFO:
     npm install
     ```
 
+4.  **Setup Chat Agent**
+    ```bash
+    cd agent
+    npm install
+    ```
+
 ### Running the Application
 
 Use the provided start script:
@@ -64,6 +71,8 @@ Use the provided start script:
 ```bash
 ./start.sh
 ```
+
+`start.sh` starts the FastAPI backend and Vite frontend. If `agent/node_modules` is missing, it installs the Node sidecar dependencies first. `/api/chat` streams through the `agent/` pi-agent sidecar instead of the old pandas DataFrame agent.
 
 ### Configuration
 

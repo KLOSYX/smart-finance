@@ -19,7 +19,7 @@ from app.schemas import (
     TextAnalysisRequest,
 )
 from app.services.pdf_processor import extract_text_from_pdf, anonymize_text
-from app.services.llm_client import analyze_transactions
+from app.services.llm_client import analyze_transactions, stream_chat_with_data
 
 router = APIRouter()
 
@@ -236,10 +236,6 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     # Get financial context
     income = float(get_setting(db, "monthly_income", "0"))
     investments = float(get_setting(db, "investments", "0"))
-
-    # Use the streaming service function
-    # Note: endpoints must import the new stream_chat_with_data function
-    from app.services.llm_client import stream_chat_with_data
 
     return StreamingResponse(
         stream_chat_with_data(
