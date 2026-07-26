@@ -12,6 +12,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import get_db
 from app.models.category import normalize_legacy_expense_category
@@ -550,7 +551,9 @@ async def preview_pdf(file: UploadFile = File(...), db: Session = Depends(get_db
         )
     digest = hashlib.sha256(content).hexdigest()
     try:
-        extracted_text = extract_text_from_pdf(io.BytesIO(content)).strip()
+        extracted_text = (
+            await run_in_threadpool(extract_text_from_pdf, io.BytesIO(content))
+        ).strip()
     except Exception as exc:
         message = str(exc).lower()
         if "password" in message or "encrypted" in message:
@@ -1372,7 +1375,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(400, "请先在设置中配置 LLM API Key")
     rows = (
         db.query(Cashflow)
-        .options(joinedload(Cashflow.category))
+        .options(joinedload(Cashflow.category), joinedload(Cashflow.import_batch))
         .order_by(Cashflow.transaction_date)
         .all()
     )
@@ -1381,13 +1384,16 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             {
                 "Date": row.transaction_date,
                 "Description": row.description,
-                "AmountCents": -row.amount_cents
-                if row.flow_type == "expense_refund"
-                else row.amount_cents
-                if row.flow_type == "expense"
-                else -row.amount_cents,
+                "AmountCents": row.amount_cents,
+                "FlowType": row.flow_type,
                 "CategoryCode": row.category.code if row.category else "other_expense",
+                "CategoryName": row.category.name if row.category else None,
+                "Channel": row.channel,
+                "HouseholdRole": row.household_role,
                 "ImportId": row.import_id,
+                "ImportFilename": row.import_batch.filename
+                if row.import_batch
+                else None,
                 "CardLastFour": row.card_last_four,
             }
             for row in rows

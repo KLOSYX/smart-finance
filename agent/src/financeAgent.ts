@@ -40,9 +40,15 @@ function createFinanceTools(request: AgentRequest) {
     defineTool({
       name: 'filter_transactions',
       label: 'Filter transactions',
-      description: 'Filter transactions by category, date range, amount sign, card suffix, or search text.',
+      description: 'Filter transactions by flow type, category, date range, card suffix, or search text.',
       parameters: Type.Object({
-      categoryCode: Type.Optional(Type.String()),
+        categoryCode: Type.Optional(Type.String()),
+        flowType: Type.Optional(Type.Union([
+          Type.Literal('income'),
+          Type.Literal('expense'),
+          Type.Literal('expense_refund'),
+          Type.Literal('transfer'),
+        ])),
         startDate: Type.Optional(Type.String()),
         endDate: Type.Optional(Type.String()),
         amountSign: Type.Optional(Type.Union([
@@ -102,6 +108,9 @@ export function getFinanceSystemPrompt(): string {
   return [
     'You are a personal finance analysis assistant.',
     'All money amounts are Chinese yuan (CNY, 人民币, ¥), never US dollars. Transaction values are stored in cents.',
+    'Every transaction amount is a positive magnitude. Use flowType for direction: income=收入, expense=支出, expense_refund=支出退款, transfer=账户间转账/还款/调拨.',
+    'Never classify income or transfer as a refund. Transfers do not count as income, expense, refund, savings, or consumption.',
+    'Use categoryName, channel, householdRole, importFilename, and description when explaining what a transaction means.',
     'Use the deterministic finance tools for transaction facts before answering.',
     'Use execute_python for arithmetic, ratios, projections, budget scenarios, and any calculation that could be error-prone.',
     'Answer concisely in the user language.',

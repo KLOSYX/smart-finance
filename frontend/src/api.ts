@@ -76,11 +76,16 @@ export async function getCategories(domain?: Domain) {
   return (await api.get<Category[]>('/metadata/categories', { params: { domain } })).data;
 }
 
-export async function sendChatMessageStream(message: string, history: Array<{ role: string; content: string }>) {
+export async function sendChatMessageStream(
+  message: string,
+  history: Array<{ role: string; content: string }>,
+  signal?: AbortSignal,
+) {
   return fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, history }),
+    signal,
   });
 }
 

@@ -8,7 +8,8 @@ Smart Finance is an intelligent personal finance system designed to automate the
 
 ### 1. 💳 Intelligent Credit Card Bill Analysis
 Stop entering data manually. Smart Finance allows you to:
-- **Parse PDF Statements**: Upload your credit card bills (PDF) directly.
+- **Parse PDF Statements**: Use Docling to preserve reading order and table
+  structure from text-based credit card statements as LLM-ready Markdown.
 - **Privacy-First Extraction**: Automatically extracts transaction details while anonymizing sensitive text *before* sending data for analysis.
 - **AI Classification**: Uses high-intelligence models (like Qwen-Max/Gemini) to accurately categorize messy merchant names into clean categories (e.g., "Dining", "Transport", "Shopping").
 
@@ -31,7 +32,7 @@ Beyond simple charts, our AI Agent acts as your personal CFO:
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, Ant Design Pro Components, MUI
-- **Backend**: Python, FastAPI, Pandas, SQLAlchemy
+- **Backend**: Python, FastAPI, Docling, Pandas, SQLAlchemy
 - **Chat Agent Runtime**: Node.js sidecar in `agent/`, powered by `@earendil-works/pi-coding-agent`
 - **AI Integration**: LangChain for PDF transaction extraction, OpenRouter-compatible chat models for the agent
 - **Data layer**: SQLAlchemy + Alembic; CNY amounts are stored as integer cents and monthly metrics are aggregated directly in SQL
@@ -41,8 +42,12 @@ Beyond simple charts, our AI Agent acts as your personal CFO:
 ### Prerequisites
 
 - Node.js (v22.19+ recommended for the pi-agent runtime)
-- Python (v3.10+)
+- Python (v3.11+)
 - `uv` (Python package manager)
+
+Docling processes text-based PDFs with OCR disabled. The first statement
+conversion downloads local layout and table models; later runs use the local
+model cache.
 
 ### Installation
 

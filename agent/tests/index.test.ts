@@ -11,7 +11,7 @@ const request: AgentRequest = {
   financialContext: { monthlyIncomeCents: 100000, investmentsCents: 10000 },
   llm: { apiKey: 'test-key', baseUrl: 'https://example.test/v1', model: 'test-model' },
   transactions: [
-    { date: '2026-05-01T00:00:00', description: 'Cafe', amountCents: 1200, categoryCode: 'dining', importId: 1, cardLastFour: '1234' },
+    { date: '2026-05-01T00:00:00', description: 'Cafe', amountCents: 1200, flowType: 'expense', categoryCode: 'dining', categoryName: '餐饮', channel: null, householdRole: 'shared', importId: 1, importFilename: null, cardLastFour: '1234' },
   ],
 };
 
@@ -32,6 +32,7 @@ describe('agent CLI', () => {
   it('tells the model all money amounts are Chinese yuan', () => {
     expect(getFinanceSystemPrompt()).toContain('Chinese yuan');
     expect(getFinanceSystemPrompt()).toContain('人民币');
+    expect(getFinanceSystemPrompt()).toContain('Never classify income or transfer as a refund');
   });
 
   it('reads a JSON request and writes JSONL events', async () => {

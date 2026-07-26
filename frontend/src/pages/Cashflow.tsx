@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Grid,
-  IconButton, MenuItem, Paper, Select, Stack, Tab, Tabs, Table, TableBody, TableCell,
+  IconButton, LinearProgress, MenuItem, Paper, Select, Stack, Tab, Tabs, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TableSortLabel, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
@@ -35,6 +35,8 @@ export default function Cashflow() {
   const [editing, setEditing] = useState<CashflowRow | null>(null);
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
+  const [pdfFilename, setPdfFilename] = useState('');
+  const [pdfElapsedSeconds, setPdfElapsedSeconds] = useState(0);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -60,6 +62,13 @@ export default function Cashflow() {
     if (params.get('review') === 'pending') window.dispatchEvent(new CustomEvent('open-review-center'));
   }, [params]);
   useEffect(() => {
+    if (!busy) return undefined;
+    const timer = window.setInterval(() => {
+      setPdfElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+  useEffect(() => {
     const refreshReviewCount = () => {
       api.get<Analytics>('/analytics/cashflow', { params: { month } }).then((response) => setAnalytics(response.data)).catch(() => undefined);
     };
@@ -79,6 +88,9 @@ export default function Cashflow() {
   };
   const uploadPdf = async (file?: File) => {
     if (!file) return;
+    setError('');
+    setPdfFilename(file.name);
+    setPdfElapsedSeconds(0);
     setBusy(true);
     try {
       const body = new FormData(); body.append('file', file);
@@ -88,6 +100,11 @@ export default function Cashflow() {
     finally { setBusy(false); }
   };
   const breakdown = tab === 'income' ? analytics.income_breakdown : analytics.expense_breakdown;
+  const pdfProgressMessage = pdfElapsedSeconds < 2
+    ? '正在上传并读取文件'
+    : pdfElapsedSeconds < 12
+      ? '正在识别页面布局与表格结构'
+      : '仍在解析复杂表格，请继续等待';
   const visibleRows = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase();
     return rows
@@ -132,6 +149,18 @@ export default function Cashflow() {
     <Box>
       <PageHeader title="家庭收支" subtitle="收入、支出、退款和转账分别记账，避免重复计算。"
         actions={<Stack direction="row" gap={1}><Button component="label" variant="outlined" disabled={busy} startIcon={<FileUploadOutlined />}>{busy ? '解析中…' : '上传 PDF'}<input hidden type="file" accept=".pdf,application/pdf" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; void uploadPdf(file); }} /></Button><Button variant="contained" startIcon={<AddRounded />} onClick={startAdd}>新增流水</Button></Stack>} />
+      {busy && (
+        <Paper variant="outlined" aria-live="polite" sx={{ mb: 2, p: 1.6, borderColor: 'primary.light', bgcolor: 'rgba(57, 118, 216, 0.035)' }}>
+          <Stack direction="row" justifyContent="space-between" gap={2} sx={{ mb: 1 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" fontWeight={750} noWrap>正在解析 {pdfFilename}</Typography>
+              <Typography variant="caption" color="text.secondary">{pdfProgressMessage}</Typography>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>{pdfElapsedSeconds} 秒</Typography>
+          </Stack>
+          <LinearProgress aria-label="PDF 解析进行中" />
+        </Paper>
+      )}
       {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>{error}</Alert>}
       {notice && <Alert severity="success" onClose={() => setNotice('')} sx={{ mb: 2 }}>{notice}</Alert>}
       <Grid container spacing={1.8} sx={{ mb: 2.2 }}>

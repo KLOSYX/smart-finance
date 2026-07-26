@@ -5,7 +5,8 @@ The FastAPI-based backend for the Smart Finance application, handling transactio
 ## Features
 
 - **Robust API**: RESTful endpoints built with FastAPI.
-- **PDF Processing**: Parses credit card statements using `pdfplumber`.
+- **PDF Processing**: Converts text-based credit card statements into
+  table-aware Markdown using Docling with accurate table-structure recognition.
 - **Privacy First**: Automatically masks sensitive information before processing.
 - **AI Analysis**: Uses LangChain and OpenAI Models to classify transactions.
 - **Financial Advice**: Generates personalized financial insights.

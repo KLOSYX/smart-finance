@@ -1,5 +1,6 @@
+import io
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import os
 import sys
 
@@ -21,17 +22,46 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
             os.path.dirname(__file__), "dummy_statement.pdf"
         )
 
-    def test_pdf_extraction_preserves_original_text(self):
+    @patch("app.services.pdf_processor._get_converter")
+    def test_pdf_extraction_returns_table_aware_markdown(self, get_converter):
+        document = Mock()
+        document.export_to_markdown.return_value = """# Bank of AI
+
+| Date | Description | Amount |
+|---|---|---:|
+| 2026-07-01 | UBER TRIP | 999.00 |
+
+john.doe@example.com
+555-0199-8888
+4000-1234-5678-9010
+"""
+        get_converter.return_value.convert.return_value.document = document
+
         with open(self.dummy_pdf_path, "rb") as f:
             text = extract_text_from_pdf(f)
 
-        # Verify text content
         self.assertIn("Bank of AI", text)
+        self.assertIn("| Date | Description | Amount |", text)
         self.assertIn("UBER TRIP", text)
         self.assertIn("999.00", text)
         self.assertIn("john.doe@example.com", text)
         self.assertIn("555-0199-8888", text)
         self.assertIn("4000-1234-5678-9010", text)
+        source = get_converter.return_value.convert.call_args.args[0]
+        self.assertEqual(source.name, "statement.pdf")
+        document.export_to_markdown.assert_called_once_with()
+
+    @patch("app.services.pdf_processor._get_converter")
+    def test_pdf_extraction_returns_empty_for_no_document_text(self, get_converter):
+        document = Mock()
+        document.export_to_markdown.return_value = " \n"
+        get_converter.return_value.convert.return_value.document = document
+
+        self.assertEqual(extract_text_from_pdf(self._pdf_stream()), "")
+
+    def _pdf_stream(self):
+        with open(self.dummy_pdf_path, "rb") as pdf:
+            return io.BytesIO(pdf.read())
 
     @patch("app.services.llm_client._process_chunk_async")
     async def test_llm_analysis(self, mock_process_chunk):
@@ -69,14 +99,20 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                     "Date": pd.Timestamp("2026-05-01 12:30:00"),
                     "Description": "Cafe",
                     "AmountCents": 1250,
+                    "FlowType": "expense",
                     "CategoryCode": "dining",
+                    "CategoryName": "餐饮",
+                    "Channel": "支付宝",
+                    "HouseholdRole": "wife",
                     "ImportId": 1,
+                    "ImportFilename": "支付宝账单.txt",
                     "CardLastFour": "1234",
                 },
                 {
                     "Date": pd.NaT,
                     "Description": None,
                     "AmountCents": None,
+                    "FlowType": "transfer",
                     "CategoryCode": None,
                     "ImportId": None,
                     "CardLastFour": None,
@@ -91,20 +127,46 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                     "date": "2026-05-01T12:30:00",
                     "description": "Cafe",
                     "amountCents": 1250,
+                    "flowType": "expense",
                     "categoryCode": "dining",
+                    "categoryName": "餐饮",
+                    "channel": "支付宝",
+                    "householdRole": "wife",
                     "importId": 1,
                     "cardLastFour": "1234",
+                    "importFilename": "支付宝账单.txt",
                 },
                 {
                     "date": None,
                     "description": "",
                     "amountCents": 0,
+                    "flowType": "transfer",
                     "categoryCode": "other_expense",
+                    "categoryName": None,
+                    "channel": None,
+                    "householdRole": "shared",
                     "importId": None,
                     "cardLastFour": None,
+                    "importFilename": None,
                 },
             ],
         )
+
+    def test_dataframe_to_transactions_requires_explicit_flow_type(self):
+        import pandas as pd
+
+        with self.assertRaisesRegex(ValueError, "missing FlowType"):
+            _dataframe_to_transactions(
+                pd.DataFrame(
+                    [
+                        {
+                            "Date": "2026-05-01",
+                            "Description": "Salary",
+                            "AmountCents": 500000,
+                        }
+                    ]
+                )
+            )
 
     @patch("app.services.llm_client.stream_pi_agent_chat")
     async def test_stream_chat_with_data_uses_pi_agent(self, mock_stream):
@@ -120,6 +182,7 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                     "Date": "2026-05-01",
                     "Description": "Cafe",
                     "AmountCents": 1250,
+                    "FlowType": "expense",
                     "CategoryCode": "dining",
                     "ImportId": 1,
                     "CardLastFour": "1234",

@@ -2,9 +2,14 @@ export interface FinanceTransaction {
   date: string | null;
   description: string;
   amountCents: number;
+  flowType: 'income' | 'expense' | 'expense_refund' | 'transfer';
   categoryCode: string;
+  categoryName: string | null;
+  channel: string | null;
+  householdRole: string;
   cardLastFour: string | null;
   importId: number | null;
+  importFilename: string | null;
 }
 
 export interface ChatHistoryMessage {

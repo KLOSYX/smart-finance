@@ -143,6 +143,7 @@ export function createPythonCalculationTool(context: {
     description: [
       'Run a short, deterministic Python calculation over the provided finance data.',
       'The variables transactions, monthly_income_cents, investments_cents, currency, currency_name, math, and statistics are available.',
+      'Each transaction amountCents is a positive magnitude; use flowType to distinguish income, expense, expense_refund, and transfer.',
       'Assign the final JSON-serializable answer to result. All money amounts are Chinese yuan cents (CNY/人民币分).',
     ].join(' '),
     parameters: Type.Object({

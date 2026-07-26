@@ -8,7 +8,7 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 
 ### 1. 💳 智能信用卡账单分析
 告别手动录入。Smart Finance 允许您：
-- **解析 PDF 账单**: 直接上传您的信用卡账单 (PDF)。
+- **解析 PDF 账单**: 使用 Docling 识别文本型信用卡账单的阅读顺序与表格结构，并转换为适合大模型分析的 Markdown。
 - **手动隐私检查**: 在发送数据进行分析之前，可在预览框中手动删除不希望发送给模型的敏感文本。
 - **AI 智能分类**: 使用高智商模型 (如 Qwen-Max/Gemini) 将混乱的商户名称准确分类为清晰的类别 (例如 "餐饮"、"交通"、"购物")。
 
@@ -31,7 +31,7 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 ## 技术栈
 
 - **前端**: React, TypeScript, Vite, Ant Design Pro Components, MUI
-- **后端**: Python, FastAPI, Pandas, SQLAlchemy
+- **后端**: Python, FastAPI, Docling, Pandas, SQLAlchemy
 - **Chat Agent 运行时**: `agent/` 目录下的 Node.js sidecar，基于 `@earendil-works/pi-coding-agent`
 - **AI 集成**: LangChain 用于 PDF 交易抽取，OpenRouter 兼容模型用于聊天 Agent
 - **数据层**: SQLAlchemy + Alembic，金额以人民币分整数保存，月度指标通过 SQL 实时聚合
@@ -41,8 +41,10 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 ### 前置要求
 
 - Node.js (建议 v22.19+，用于 pi-agent 运行时)
-- Python (v3.10+)
+- Python (v3.11+)
 - `uv` (Python 包管理器)
+
+Docling 只处理文本型 PDF，不启用 OCR。首次解析账单时会自动下载本地版面与表格模型，后续从本机缓存加载。
 
 ### 安装
 

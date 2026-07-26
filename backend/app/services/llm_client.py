@@ -264,6 +264,9 @@ def _dataframe_to_transactions(df):
             amount = 0
         description = row.get("Description")
         category = row.get("CategoryCode")
+        flow_type = row.get("FlowType")
+        if flow_type not in {"income", "expense", "expense_refund", "transfer"}:
+            raise ValueError(f"Invalid or missing FlowType: {flow_type!r}")
         transactions.append(
             {
                 "date": _date_to_iso(row.get("Date")),
@@ -271,11 +274,17 @@ def _dataframe_to_transactions(df):
                 if description is None or pd.isna(description)
                 else str(description),
                 "amountCents": int(amount),
+                "flowType": flow_type,
                 "categoryCode": normalize_category(category),
+                "categoryName": _nullable_string(row.get("CategoryName")),
+                "channel": _nullable_string(row.get("Channel")),
+                "householdRole": _nullable_string(row.get("HouseholdRole"))
+                or "shared",
                 "importId": int(row["ImportId"])
                 if row.get("ImportId") is not None and not pd.isna(row.get("ImportId"))
                 else None,
                 "cardLastFour": _nullable_string(row.get("CardLastFour")),
+                "importFilename": _nullable_string(row.get("ImportFilename")),
             }
         )
     return transactions
