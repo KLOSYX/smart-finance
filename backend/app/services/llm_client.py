@@ -4,11 +4,12 @@ import asyncio
 import pandas as pd
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 
 from app.services.pi_agent_client import stream_pi_agent_chat
+from app.models.category import CATEGORY_CODES, normalize_category
 
 CATEGORIES = [
     "住房",
@@ -61,25 +62,11 @@ class OpenRouterChatOpenAI(ChatOpenAI):
         return message_dict
 
 
-def _get_llm(api_key, base_url, model, temperature=0.1):
+def _get_llm(api_key, base_url, model):
     """
     Helper to create an OpenRouterChatOpenAI instance.
     """
-    return OpenRouterChatOpenAI(
-        api_key=api_key, base_url=base_url, model=model, temperature=temperature
-    )
-
-
-def _format_financial_context(monthly_income=0, investments=0):
-    """
-    Constructs a consistent context string for financial data.
-    """
-    context = ""
-    if monthly_income > 0:
-        context += f"User Monthly Income: ¥{monthly_income:,.2f}. "
-    if investments > 0:
-        context += f"User Current Investments: ¥{investments:,.2f}. "
-    return context
+    return OpenRouterChatOpenAI(api_key=api_key, base_url=base_url, model=model)
 
 
 def _get_agent_base_prompt(df_summary, language="zh"):
@@ -107,27 +94,6 @@ def get_categories(language="zh"):
     return CATEGORIES_EN if language == "en" else CATEGORIES
 
 
-def _chunk_text(text, max_chars=8000):
-    if not text:
-        return []
-    lines = text.split("\n")
-    chunks = []
-    current_chunk = []
-    current_length = 0
-    for line in lines:
-        line_len = len(line)
-        if current_length + line_len > max_chars and current_chunk:
-            chunks.append("\n".join(current_chunk))
-            current_chunk = [line]
-            current_length = line_len
-        else:
-            current_chunk.append(line)
-            current_length += line_len + 1
-    if current_chunk:
-        chunks.append("\n".join(current_chunk))
-    return chunks
-
-
 async def _process_chunk_async(
     chunk, api_key, base_url, model_name, semaphore, language="zh"
 ):
@@ -136,25 +102,22 @@ async def _process_chunk_async(
     """
     async with semaphore:
         try:
-            llm = _get_llm(api_key, base_url, model_name, temperature=0.1)
+            llm = _get_llm(api_key, base_url, model_name)
 
             current_year = datetime.datetime.now().year
 
-            target_categories = CATEGORIES_EN if language == "en" else CATEGORIES
-
-            # Example category for the prompt (Shopping / 购物)
-            ex_category = target_categories[4]
+            target_categories = ", ".join(CATEGORY_CODES)
 
             system_prompt = f"""
-            你是一位专业的财务助手。你的任务是从提供的文本中提取信用卡交易详情，并将每笔交易分类到以下类别之一：{", ".join(target_categories)}。
+            你是一位专业的财务助手。你的任务是从提供的文本中提取信用卡交易详情，并将每笔交易分类到以下稳定代码之一：{target_categories}。
 
             严格以JSON对象列表的形式返回输出。每个对象必须包含以下键：
             - "Date": 交易日期 (格式 YYYY-MM-DD)。如果年份缺失，假设为 {current_year}。
             - "Description": 商户名称或交易描述。
             - "Amount": 交易的数值 (正数表示支出，负数表示退款，忽略信用卡还款)。
-            - "Category": 从提供的类别中选择一个。
-              - 如果描述模糊不清或你不确定类别，请务必使用 "需要复核"。
-              - 只有当你确定它不属于上述任何主要类别时，才使用 "其他"。
+            - "Category": 从提供的代码中选择一个。
+              - 如果描述模糊不清或你不确定类别，请务必使用 "needs_review"。
+              - 只有当你确定它不属于上述任何主要类别时，才使用 "other"。
             - "CardLastFour": 交易卡号后四位。如果未找到，返回 null。例如："8888"。
 
             只返回JSON数据，不要有任何Markdown格式或解释。
@@ -163,7 +126,7 @@ async def _process_chunk_async(
                     "Date": "2023-01-01",
                     "Description": "超市",
                     "Amount": 50.00,
-                    "Category": "{ex_category}",
+                    "Category": "shopping",
                     "CardLastFour": "1234"
                 }}
             ]
@@ -193,63 +156,81 @@ async def _process_chunk_async(
 
 async def analyze_transactions(text, api_key, base_url, model, language="zh"):
     """
-    Sends the anonymized text to the LLM to extract and classify transactions using LangChain asynchronously.
+    Sends the complete statement text to the LLM in one request so table
+    headers and transaction rows always share the same context.
     """
-    print(f"DEBUG: Starting LangChain analysis with model='{model}'")
-    chunks = _chunk_text(text)
-    print(f"DEBUG: Text split into {len(chunks)} chunks. Processing in parallel...")
-
-    all_transactions = []
-
-    # Limit concurrent requests
-    semaphore = asyncio.Semaphore(5)
-
-    tasks = [
-        _process_chunk_async(chunk, api_key, base_url, model, semaphore, language)
-        for chunk in chunks
-    ]
-
-    results = await asyncio.gather(*tasks)
-
-    for data in results:
-        if data and isinstance(data, list):
-            all_transactions.extend(data)
-
-    print(f"DEBUG: Total transactions found: {len(all_transactions)}")
-    return all_transactions
+    if not text:
+        return []
+    result = await _process_chunk_async(
+        text, api_key, base_url, model, asyncio.Semaphore(1), language
+    )
+    return result if isinstance(result, list) else []
 
 
-def _summarize_dataframe(df, max_cols=15):
-    """
-    Provide a lightweight description of the DataFrame to give the LLM context.
-    """
-    if df is None:
-        return "无可用数据表。"
-    n_rows, n_cols = df.shape
-    cols = list(df.columns)
-    col_summaries = []
-    for col in cols[:max_cols]:
-        series = df[col]
-        dtype = series.dtype
-        nulls = int(series.isna().sum())
-        col_summaries.append(f"{col} (dtype={dtype}, nulls={nulls})")
-    if len(cols) > max_cols:
-        col_summaries.append(f"...另外 {len(cols) - max_cols} 列")
-    columns_desc = "; ".join(col_summaries) if col_summaries else "无列信息"
-    return f"行数: {n_rows}，列数: {n_cols}。列信息: {columns_desc}"
-
-
-def _extract_final_answer(text):
-    """
-    Trim agent chatter and keep only the final answer section.
-    """
-    if not isinstance(text, str):
-        return text
-    marker = "FINAL ANSWER:"
-    idx = text.rfind(marker)
-    if idx == -1:
-        return text.strip()
-    return text[idx:].strip()
+async def analyze_financial_records(
+    text,
+    api_key,
+    base_url,
+    model,
+    import_kind="cashflow",
+    instruction=None,
+    images=None,
+):
+    """Extract candidates without committing them to the household ledger."""
+    llm = _get_llm(api_key, base_url, model)
+    system_prompt = """你是家庭财务信息抽取器。只返回 JSON 数组，不要解释。
+每项必须有 candidate_type，取 cashflow 或 asset_snapshot。
+cashflow 字段：transaction_date(YYYY-MM-DD), description, amount(始终为正数), flow_type
+(income/expense/expense_refund/transfer), category_code, channel, household_role
+(husband/wife/shared), card_last_four。
+asset_snapshot 字段：name, valuation_date(YYYY-MM-DD), value(正数), category_code,
+channel, household_role(husband/wife/shared)。
+分类或关键字段明确时使用对应的正常分类。只有确实无法判断、需要人工决定时才使用固定待复核分类：
+资产使用 needs_review_asset，收入使用 needs_review_income，支出使用 needs_review。
+不要因为信息来自图片或非结构化文本就自动标记待复核；信用卡还款和账户间划转用 transfer；
+账单原文中的正数通常表示支出，负数通常表示退款。输出时 amount 必须转换为正数，
+并仅使用 flow_type 表达方向：普通支出用 expense，退款用 expense_refund。
+如果账单用“退款、退货、冲正、撤销”等文字明确表示退款，即使原始金额没有负号也使用 expense_refund。
+同一商户的原支出与退款是两条不同方向的记录，不得把退款识别成第二笔 expense。
+例如：“餐厅消费 200.00”应输出 amount=200.00、flow_type=expense；
+“餐厅退款 -200.00”应输出 amount=200.00、flow_type=expense_refund。
+禁止输出负数；禁止把退款输出为 expense。
+未实现的资产涨跌不得生成收入。
+住房公积金的 category_code 必须使用 provident_fund，不要使用 social_security。
+正常分类的记录会自动入账；只有待复核分类的记录进入人工复核。不要输出置信度。
+用户会声明本次主要内容是 asset、cashflow 或 mixed，这是识别提示而不是强制类型。
+必须以实际数据内容决定 candidate_type：即使用户选错，也要把资产余额识别为 asset_snapshot，
+把真实收入、支出、退款或转账识别为 cashflow；内容确实混合时可以同时返回两种类型。
+“用户指令”只用于约束抽取方式，绝不能把指令中的示例、日期、金额或分类当作待录入数据。
+只有“待识别文字”和图片中的内容才是财务数据来源。"""
+    user_instruction = str(instruction or "").strip()
+    source_text = str(text or "").strip()
+    text_content = (
+        f"用户声明的主要内容（仅作提示，若与数据矛盾则以实际数据为准）：{import_kind}\n"
+        f"用户指令（仅作抽取规则，不是财务数据）：\n{user_instruction or '无'}\n\n"
+        f"待识别文字（这是财务数据来源）：\n{source_text or '无文字，请读取所附图片'}"
+    )
+    human_content: list[dict] = [{"type": "text", "text": text_content}]
+    for image in images or []:
+        human_content.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": image["data_url"]},
+            }
+        )
+    parser = JsonOutputParser()
+    response = await llm.ainvoke(
+        [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=human_content),
+        ]
+    )
+    result = parser.invoke(response)
+    if isinstance(result, dict):
+        result = result.get("items", result.get("records", []))
+    if not isinstance(result, list):
+        raise ValueError("模型未返回记录数组")
+    return result
 
 
 def _nullable_string(value):
@@ -278,60 +259,26 @@ def _dataframe_to_transactions(df):
     """
     transactions = []
     for row in df.to_dict(orient="records"):
-        amount = row.get("Amount", 0)
+        amount = row.get("AmountCents", 0)
         if amount is None or pd.isna(amount):
             amount = 0
         description = row.get("Description")
-        category = row.get("Category")
+        category = row.get("CategoryCode")
         transactions.append(
             {
                 "date": _date_to_iso(row.get("Date")),
                 "description": ""
                 if description is None or pd.isna(description)
                 else str(description),
-                "amount": float(amount),
-                "category": "Other"
-                if category is None or pd.isna(category)
-                else str(category),
-                "source": _nullable_string(row.get("Source")),
+                "amountCents": int(amount),
+                "categoryCode": normalize_category(category),
+                "importId": int(row["ImportId"])
+                if row.get("ImportId") is not None and not pd.isna(row.get("ImportId"))
+                else None,
                 "cardLastFour": _nullable_string(row.get("CardLastFour")),
             }
         )
     return transactions
-
-
-def run_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
-    """
-    Deprecated compatibility wrapper.
-    """
-    return "Please use agentic_financial_advice instead."
-
-
-def agentic_financial_advice(
-    df, api_key, base_url, model, monthly_income=0, investments=0
-):
-    """
-    Deprecated compatibility wrapper.
-    """
-    return "Please use agentic_financial_advice instead."
-
-
-def generate_financial_advice(
-    summary_df, api_key, base_url, model, monthly_income=0, investments=0
-):
-    """
-    Backward compatibility wrapper.
-    """
-    return agentic_financial_advice(
-        summary_df, api_key, base_url, model, monthly_income, investments
-    )
-
-
-async def stream_autonomous_agent(df, query, api_key, base_url, model, max_turns=20):
-    """
-    Deprecated compatibility wrapper.
-    """
-    yield "Please use stream_chat_with_data instead."
 
 
 async def stream_chat_with_data(
@@ -341,8 +288,8 @@ async def stream_chat_with_data(
     api_key,
     base_url,
     model,
-    monthly_income=0,
-    investments=0,
+    monthly_income_cents=0,
+    investments_cents=0,
     language="zh",
 ):
     """
@@ -355,8 +302,8 @@ async def stream_chat_with_data(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        monthly_income=monthly_income,
-        investments=investments,
+        monthly_income_cents=monthly_income_cents,
+        investments_cents=investments_cents,
         language=language,
     ):
         yield token

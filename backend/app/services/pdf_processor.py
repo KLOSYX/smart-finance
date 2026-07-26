@@ -1,8 +1,6 @@
 import pdfplumber
 
-from app.services.privacy_filter import anonymize_text
-
-__all__ = ["anonymize_text", "extract_text_from_pdf"]
+__all__ = ["extract_text_from_pdf"]
 
 
 def extract_text_from_pdf(file_stream):
@@ -15,14 +13,10 @@ def extract_text_from_pdf(file_stream):
     Returns:
         str: The extracted text from the PDF.
     """
-    text = ""
-    try:
-        with pdfplumber.open(file_stream) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-    except Exception as e:
-        return f"Error reading PDF: {str(e)}"
-
-    return text
+    text_parts: list[str] = []
+    with pdfplumber.open(file_stream) as pdf:
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            if page_text and page_text.strip():
+                text_parts.append(page_text.strip())
+    return "\n".join(text_parts)

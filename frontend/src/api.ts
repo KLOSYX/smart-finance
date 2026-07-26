@@ -1,122 +1,96 @@
-import axios from 'axios';
+import axios, { isAxiosError } from 'axios';
 
-// Create an axios instance with a custom config
-const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+export const api = axios.create({ baseURL: '/api' });
 
-export interface Transaction {
+export type Role = 'husband' | 'wife' | 'shared';
+export type FlowType = 'income' | 'expense' | 'expense_refund' | 'transfer';
+export type Domain = 'asset' | 'income' | 'expense';
+
+export interface Category {
   id: number;
-  date: string;
-  description: string;
-  amount: number;
-  category: string;
-  source: string;
-  card_last_four?: string;
+  domain: Domain;
+  code: string;
+  name: string;
+  is_default: boolean;
+  is_archived: boolean;
 }
 
-export type TransactionCreate = Omit<Transaction, 'id'>;
+export interface Asset {
+  id: number;
+  name: string;
+  category_id: number;
+  category_name: string;
+  channel: string;
+  household_role: Role;
+  note: string | null;
+  current_value_cents: number;
+  previous_value_cents: number | null;
+  monthly_change_cents: number;
+  monthly_change_rate: number | null;
+  valuation_date: string;
+  status: 'current' | 'stale';
+}
+
+export interface Cashflow {
+  id: number;
+  transaction_date: string;
+  description: string;
+  amount_cents: number;
+  flow_type: FlowType;
+  category_id: number | null;
+  category_name: string | null;
+  channel: string | null;
+  household_role: Role;
+  card_last_four: string | null;
+  import_id: number | null;
+}
+
+export interface CashflowPage {
+  items: Cashflow[];
+  page: number;
+  page_size: number;
+  total: number;
+}
 
 export interface Settings {
+  husband_name: string;
+  wife_name: string;
+  default_role: Role;
   api_key: string;
   base_url: string;
   model_name: string;
-  monthly_income: string;
-  investments: string;
+  llm_extraction_enabled: boolean;
+  language: string;
 }
 
-export interface ParseResult {
-  filename: string;
-  text: string;
-  message: string;
+export const money = (cents: number) =>
+  new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 2 }).format(cents / 100);
+
+export const shortMoney = (cents: number) => {
+  const value = cents / 100;
+  if (Math.abs(value) >= 10000) return `¥${(value / 10000).toFixed(1)}万`;
+  return `¥${value.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+};
+
+export async function getCategories(domain?: Domain) {
+  return (await api.get<Category[]>('/metadata/categories', { params: { domain } })).data;
 }
 
-export const getTransactions = async () => {
-  const response = await api.get<Transaction[]>('/transactions');
-  return response.data;
-};
-
-export const createTransaction = async (data: TransactionCreate) => {
-  const response = await api.post<Transaction>('/transactions', data);
-  return response.data;
-};
-
-export const updateTransaction = async (id: number, data: Partial<Transaction>) => {
-  const response = await api.patch<Transaction>(`/transactions/${id}`, data);
-  return response.data;
-};
-
-export const deleteTransaction = async (id: number) => {
-  const response = await api.delete(`/transactions/${id}`);
-  return response.data;
-};
-
-export const clearAllTransactions = async () => {
-  const response = await api.delete('/transactions');
-  return response.data;
-};
-
-// New: Step 1 - Parse PDF
-export const parsePdf = async (file: File) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await api.post<ParseResult>('/parse_pdf', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return response.data;
-};
-
-// New: Step 2 - Analyze Text
-export const analyzeText = async (text: string, source_filename: string, language: string = 'zh') => {
-  const response = await api.post<{ message: string, transactions_added: number, transactions: Transaction[] }>('/analyze_text', { text, source_filename, language });
-  return response.data;
-};
-
-// Deprecated: Old direct upload
-export const uploadPdf = async (file: File) => {
-  // This endpoint no longer exists in backend as-is, mapping to parsePdf for compatibility or removal
-  return parsePdf(file);
-};
-
-export const getStats = async () => {
-  const response = await api.get('/stats');
-  return response.data;
-};
-
-export const getSettings = async () => {
-  const response = await api.get<Settings>('/settings');
-  return response.data;
-};
-
-export const updateSettings = async (settings: Partial<Settings>) => {
-  const response = await api.post('/settings', settings);
-  return response.data;
-};
-
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-export const sendChatMessage = async (message: string, history: { role: 'user' | 'assistant', content: string }[], language: string = 'zh') => {
-  const response = await api.post<{ response: string }>('/chat', { message, history, language });
-  return response.data;
-};
-
-export const sendChatMessageStream = async (message: string, history: { role: 'user' | 'assistant', content: string }[], language: string = 'zh') => {
-  const response = await fetch('http://127.0.0.1:8008/api/chat', {
+export async function sendChatMessageStream(message: string, history: Array<{ role: string; content: string }>) {
+  return fetch('/api/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ message, history, language }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
   });
-  return response;
-};
+}
 
-export default api;
+export function apiErrorMessage(error: unknown, fallback: string) {
+  if (!isAxiosError(error)) return fallback;
+  const detail = error.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') {
+    return detail.message;
+  }
+  if (error.code === 'ERR_NETWORK') return '无法连接到本地服务，请确认应用已启动';
+  return fallback;
+}

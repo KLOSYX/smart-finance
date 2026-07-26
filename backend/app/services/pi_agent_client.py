@@ -1,12 +1,22 @@
 import asyncio
 import json
+import os
+import shutil
 from pathlib import Path
 from typing import Any, AsyncIterator
 
 
 AGENT_DIR = Path(__file__).resolve().parents[3] / "agent"
 AGENT_ENTRYPOINT = AGENT_DIR / "src" / "index.ts"
+TSX_ENTRYPOINT = AGENT_DIR / "node_modules" / "tsx" / "dist" / "cli.mjs"
 PROCESS_TERMINATION_TIMEOUT = 2
+
+
+def _agent_command() -> tuple[str, str, str]:
+    """Run the local tsx CLI through node without a Windows command shim."""
+    node_name = "node.exe" if os.name == "nt" else "node"
+    node_executable = shutil.which(node_name) or node_name
+    return node_executable, str(TSX_ENTRYPOINT), str(AGENT_ENTRYPOINT)
 
 
 def parse_agent_event(line: str) -> dict[str, Any] | None:
@@ -43,8 +53,8 @@ async def stream_pi_agent_chat(
     api_key: str,
     base_url: str,
     model: str,
-    monthly_income: float,
-    investments: float,
+    monthly_income_cents: int,
+    investments_cents: int,
     language: str,
 ) -> AsyncIterator[str]:
     request = {
@@ -52,8 +62,8 @@ async def stream_pi_agent_chat(
         "history": history[-5:],
         "language": language,
         "financialContext": {
-            "monthlyIncome": monthly_income,
-            "investments": investments,
+            "monthlyIncomeCents": monthly_income_cents,
+            "investmentsCents": investments_cents,
         },
         "llm": {
             "apiKey": api_key,
@@ -64,17 +74,18 @@ async def stream_pi_agent_chat(
     }
 
     try:
+        if not TSX_ENTRYPOINT.is_file():
+            yield "Agent Error: Agent dependencies are missing. Run npm install in the agent directory."
+            return
         process = await asyncio.create_subprocess_exec(
-            "npx",
-            "tsx",
-            str(AGENT_ENTRYPOINT),
+            *_agent_command(),
             cwd=str(AGENT_DIR),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError:
-        yield "Agent Error: Node.js/npx is not available. Please install Node.js dependencies in the agent directory."
+        yield "Agent Error: Node.js is not available. Install Node.js and the agent dependencies."
         return
 
     assert process.stdin is not None
@@ -83,6 +94,7 @@ async def stream_pi_agent_chat(
 
     stderr_task = asyncio.create_task(process.stderr.read())
     emitted_error = False
+    emitted_output = False
 
     try:
         payload = json.dumps(request, ensure_ascii=False).encode("utf-8")
@@ -106,6 +118,7 @@ async def stream_pi_agent_chat(
                 continue
             rendered = render_agent_event(event)
             if rendered:
+                emitted_output = True
                 emitted_error = event.get("type") == "error" or emitted_error
                 yield rendered
 
@@ -113,6 +126,8 @@ async def stream_pi_agent_chat(
         stderr = (await stderr_task).decode("utf-8", errors="replace").strip()
         if returncode != 0 and not emitted_error:
             yield f"Agent Error: {stderr or f'pi-agent process exited with code {returncode}'}"
+        elif returncode == 0 and not emitted_output:
+            yield "Agent Error: Agent returned no response. Check the model configuration and try again."
     finally:
         if process.returncode is None:
             process.terminate()

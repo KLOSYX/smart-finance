@@ -19,7 +19,8 @@ fi
 
 echo "Starting Backend (FastAPI)..."
 cd backend
-uv run uvicorn app.main:app --reload --port 8008 &
+uv run python -c 'from app.core.database import ensure_database; ensure_database()'
+uv run uvicorn app.main:app --port 8008 &
 BACKEND_PID=$!
 cd ..
 

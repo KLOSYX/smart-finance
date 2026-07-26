@@ -8,10 +8,10 @@ const request: AgentRequest = {
   message: 'Summarize my spending',
   history: [],
   language: 'en',
-  financialContext: { monthlyIncome: 1000, investments: 100 },
+  financialContext: { monthlyIncomeCents: 100000, investmentsCents: 10000 },
   llm: { apiKey: 'test-key', baseUrl: 'https://example.test/v1', model: 'test-model' },
   transactions: [
-    { date: '2026-05-01T00:00:00', description: 'Cafe', amount: 12, category: 'Dining', source: 'a.pdf', cardLastFour: '1234' },
+    { date: '2026-05-01T00:00:00', description: 'Cafe', amountCents: 1200, categoryCode: 'dining', importId: 1, cardLastFour: '1234' },
   ],
 };
 

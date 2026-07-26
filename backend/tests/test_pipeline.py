@@ -6,11 +6,10 @@ import sys
 # Add backend to path so we can import app
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.services.pdf_processor import extract_text_from_pdf, anonymize_text
+from app.services.pdf_processor import extract_text_from_pdf
 from app.services.llm_client import (
     _dataframe_to_transactions,
     analyze_transactions,
-    generate_financial_advice,
     stream_chat_with_data,
 )
 
@@ -22,9 +21,7 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
             os.path.dirname(__file__), "dummy_statement.pdf"
         )
 
-    @patch("app.services.privacy_filter._get_openai_redactor")
-    def test_pdf_extraction_and_anonymization(self, mock_redactor):
-        mock_redactor.side_effect = RuntimeError("skip model in unit test")
+    def test_pdf_extraction_preserves_original_text(self):
         with open(self.dummy_pdf_path, "rb") as f:
             text = extract_text_from_pdf(f)
 
@@ -32,40 +29,9 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Bank of AI", text)
         self.assertIn("UBER TRIP", text)
         self.assertIn("999.00", text)
-
-        # Anonymize
-        clean_text = anonymize_text(text)
-
-        # Verify PII removal
-        self.assertNotIn("john.doe@example.com", clean_text)
-        self.assertIn("[EMAIL_REDACTED]", clean_text)
-
-        self.assertNotIn("555-0199-8888", clean_text)
-        self.assertIn("[PHONE_REDACTED]", clean_text)
-
-        self.assertNotIn("4000-1234-5678-9010", clean_text)
-        self.assertIn("[CC_REDACTED]", clean_text)
-
-    @patch("app.services.privacy_filter._get_openai_redactor")
-    def test_chinese_name_redaction(self, mock_redactor):
-        mock_redactor.side_effect = RuntimeError("skip model in unit test")
-        text = """
-        姓名: 张三
-        户名：李四
-        客户: 王五
-        持卡人: 赵六
-        Description: 购买了苹果
-        """
-        clean = anonymize_text(text)
-
-        self.assertNotIn("张三", clean)
-        self.assertNotIn("李四", clean)
-        self.assertNotIn("王五", clean)
-        self.assertNotIn("赵六", clean)
-        self.assertIn("姓名: [NAME_REDACTED]", clean)
-        self.assertIn("户名：[NAME_REDACTED]", clean)
-        # Ensure common words aren't redacted
-        self.assertIn("购买了苹果", clean)
+        self.assertIn("john.doe@example.com", text)
+        self.assertIn("555-0199-8888", text)
+        self.assertIn("4000-1234-5678-9010", text)
 
     @patch("app.services.llm_client._process_chunk_async")
     async def test_llm_analysis(self, mock_process_chunk):
@@ -85,20 +51,14 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
             },
         ]
 
-        text = "Simulated extracted text"
+        text = "日期 商户 金额\n" + ("2026-07-01 示例商户 10.00\n" * 500)
         result = await analyze_transactions(text, "fake-key", "fake-url", "gpt-3.5")
 
+        mock_process_chunk.assert_awaited_once()
+        self.assertEqual(mock_process_chunk.await_args.args[0], text)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["Category"], "Transportation")
         self.assertEqual(result[1]["Amount"], 5.40)
-
-    def test_financial_advice(self):
-        import pandas as pd
-
-        df = pd.DataFrame([{"Category": "Food", "Amount": 100}])
-
-        advice = generate_financial_advice(df, "fake-key", "fake-url", "gpt-3.5")
-        self.assertEqual(advice, "Please use agentic_financial_advice instead.")
 
     def test_dataframe_to_transactions_for_pi_agent(self):
         import pandas as pd
@@ -108,17 +68,17 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                 {
                     "Date": pd.Timestamp("2026-05-01 12:30:00"),
                     "Description": "Cafe",
-                    "Amount": 12.5,
-                    "Category": "Food",
-                    "Source": "statement.pdf",
+                    "AmountCents": 1250,
+                    "CategoryCode": "dining",
+                    "ImportId": 1,
                     "CardLastFour": "1234",
                 },
                 {
                     "Date": pd.NaT,
                     "Description": None,
-                    "Amount": None,
-                    "Category": None,
-                    "Source": None,
+                    "AmountCents": None,
+                    "CategoryCode": None,
+                    "ImportId": None,
                     "CardLastFour": None,
                 },
             ]
@@ -130,17 +90,17 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                 {
                     "date": "2026-05-01T12:30:00",
                     "description": "Cafe",
-                    "amount": 12.5,
-                    "category": "Food",
-                    "source": "statement.pdf",
+                    "amountCents": 1250,
+                    "categoryCode": "dining",
+                    "importId": 1,
                     "cardLastFour": "1234",
                 },
                 {
                     "date": None,
                     "description": "",
-                    "amount": 0.0,
-                    "category": "Other",
-                    "source": None,
+                    "amountCents": 0,
+                    "categoryCode": "other_expense",
+                    "importId": None,
                     "cardLastFour": None,
                 },
             ],
@@ -159,9 +119,9 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
                 {
                     "Date": "2026-05-01",
                     "Description": "Cafe",
-                    "Amount": 12.5,
-                    "Category": "Food",
-                    "Source": "statement.pdf",
+                    "AmountCents": 1250,
+                    "CategoryCode": "dining",
+                    "ImportId": 1,
                     "CardLastFour": "1234",
                 }
             ]
@@ -185,7 +145,7 @@ class TestPipeline(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(chunks, ["rows=1"])
         mock_stream.assert_called_once()
         self.assertEqual(mock_stream.call_args.kwargs["message"], "summary")
-        self.assertEqual(mock_stream.call_args.kwargs["monthly_income"], 1000)
+        self.assertEqual(mock_stream.call_args.kwargs["monthly_income_cents"], 1000)
 
 
 if __name__ == "__main__":

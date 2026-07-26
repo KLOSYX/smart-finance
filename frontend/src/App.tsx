@@ -1,45 +1,31 @@
-import { useState } from 'react';
-import { Container, Box, CssBaseline, ThemeProvider } from '@mui/material';
-import theme from './theme';
-import Navbar from './components/Navbar';
+import { CssBaseline, ThemeProvider } from '@mui/material';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import AppShell from './components/Navbar';
 import Dashboard from './pages/Dashboard';
-import Transactions from './pages/Transactions';
-import Chat from './pages/Chat';
-import SettingsPage from './pages/Settings';
+import Assets from './pages/Assets';
+import Cashflow from './pages/Cashflow';
+import Insights from './pages/Insights';
+import Settings from './pages/Settings';
+import theme from './theme';
+import { HouseholdSettingsProvider } from './contexts/HouseholdSettingsContext';
 
-import { LanguageProvider } from './contexts/LanguageContext';
-
-function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'transactions':
-        return <Transactions />;
-      case 'chat':
-        return <Chat />;
-      case 'settings':
-        return <SettingsPage />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
+export default function App() {
   return (
-    <LanguageProvider>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Navbar onNavigate={setCurrentPage} activePage={currentPage} />
-        <Container maxWidth="xl" sx={{ mt: 10, mb: 4, px: { xs: 2, sm: 3, md: 4 } }}>
-          <Box>
-            {renderPage()}
-          </Box>
-        </Container>
-      </ThemeProvider>
-    </LanguageProvider>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter>
+        <HouseholdSettingsProvider>
+          <AppShell>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/assets" element={<Assets />} />
+              <Route path="/cashflow" element={<Cashflow />} />
+              <Route path="/insights" element={<Insights />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          </AppShell>
+        </HouseholdSettingsProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
-
-export default App;

@@ -1,407 +1,84 @@
-import React, { useEffect, useState } from 'react';
-import {
-    Box, Paper, Typography, Card, CardContent, CircularProgress,
-    Dialog, DialogTitle, DialogContent, DialogActions, Button,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Alert
-} from '@mui/material';
-import Grid from '@mui/material/Grid';
-import { BarChart } from '@mui/x-charts/BarChart';
-import { PieChart } from '@mui/x-charts/PieChart';
-import { TrendingUp, AccountBalance } from '@mui/icons-material';
-import { getStats, getTransactions } from '../api';
-import type { Transaction } from '../api';
-import { colors } from '../theme';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useEffect, useState } from 'react';
+import { Alert, Box, Button, Chip, Grid, LinearProgress, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { AccountBalanceWalletOutlined, ArrowForwardRounded, AutoAwesomeOutlined, PaidOutlined, SavingsOutlined, TrendingUpOutlined, WarningAmberRounded } from '@mui/icons-material';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useNavigate } from 'react-router-dom';
+import { api, money, shortMoney } from '../api';
+import { EmptyState, MetricCard, PageHeader, SectionCard } from '../components/FinanceUI';
 
-interface CategorySummary {
-    Category: string;
-    Amount: number;
-    [key: string]: string | number;
+interface Overview {
+  month: string;
+  metrics: { total_assets_cents: number; income_cents: number; expense_cents: number; balance_cents: number };
+  asset_trend: Array<{ month: string; value_cents: number }>;
+  asset_structure: Array<{ name: string; value_cents: number }>;
+  cashflow_trend: Array<{ month: string; income_cents: number; expense_cents: number; balance_cents: number }>;
+  top_income: Array<{ name: string; value_cents: number }>;
+  top_expense: Array<{ name: string; value_cents: number }>;
+  attention: { stale_assets: Array<{ asset_id: number; name: string; valuation_date: string }>; pending_review_count: number };
 }
 
-
-interface CardSummary {
-    CardLastFour: string;
-    Amount: number;
-    [key: string]: string | number;
-}
-
-interface Stats {
-    total_expense: number; // net expense (expenses - refunds)
-    gross_expense?: number; // total positive amounts
-    refund_total?: number; // negative numbers (refunds)
-    category_summary: CategorySummary[];
-    card_summary: CardSummary[];
-}
-
-// Trust Blue color palette for charts
-const CHART_COLORS = [
-    colors.primary.main,
-    colors.primary.light,
-    colors.cta.main,
-    colors.success.main,
-    '#8B5CF6',
-    '#EC4899',
-    '#F59E0B',
-    '#10B981',
-];
+const colors = ['#3976D8', '#56A5A7', '#8A71D6', '#E5A24B', '#67A76D', '#D97878'];
+const currentMonth = new Date().toISOString().slice(0, 7);
 
 export default function Dashboard() {
-    const { t } = useLanguage();
-    const [stats, setStats] = useState<Stats | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    // Drill down state
-    const [openDialog, setOpenDialog] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [categoryTransactions, setCategoryTransactions] = useState<Transaction[]>([]);
-    const [loadingDetails, setLoadingDetails] = useState(false);
-
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                const data = await getStats();
-                setStats(data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchStats();
-    }, []);
-
-    const openDetails = async (category: string) => {
-        setSelectedCategory(category);
-        setOpenDialog(true);
-        setLoadingDetails(true);
-        try {
-            const allTx = await getTransactions();
-            const filtered = allTx.filter(t => t.category === category);
-            setCategoryTransactions(filtered);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoadingDetails(false);
-        }
-    };
-
-    const handleItemClick = (_event: React.MouseEvent<SVGElement, MouseEvent>, itemIdentifier: { dataIndex?: number }) => {
-        if (itemIdentifier && typeof itemIdentifier.dataIndex === 'number' && stats) {
-            const category = stats.category_summary[itemIdentifier.dataIndex].Category;
-            openDetails(category);
-        }
-    };
-
-    if (loading) {
-        return (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 2 }}>
-                <CircularProgress size={60} thickness={4} />
-                <Typography variant="body1" color="text.secondary">{t('common.loading')}</Typography>
-            </Box>
-        );
-    }
-
-    if (!stats || stats.category_summary.length === 0) {
-        return (
-            <Box sx={{ py: 8 }}>
-                <Alert severity="info" sx={{ maxWidth: 600, mx: 'auto', borderRadius: 3 }}>
-                    <Typography variant="h6" gutterBottom>{t('common.no_data')}</Typography>
-                    <Typography variant="body2">
-                        {t('common.no_data_helper')}
-                    </Typography>
-                </Alert>
-            </Box>
-        );
-    }
-
-    // Prepare data for charts
-
-    const pieChartData = stats.category_summary.map((item: CategorySummary, index: number) => ({
-        id: index,
-        value: item.Amount,
-        label: item.Category,
-        color: CHART_COLORS[index % CHART_COLORS.length]
-    }));
-
-    return (
-        <Box sx={{ width: '100%', pb: 4 }}>
-            <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 2 }}>
-                <TrendingUp sx={{ fontSize: 40, color: 'primary.main' }} />
-                <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
-                    {t('dashboard.title')}
-                </Typography>
-            </Box>
-
-            {/* Key Metrics Card */}
-            <Grid container spacing={3} sx={{ mb: 4 }}>
-                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Card
-                        elevation={0}
-                        sx={{
-                            background: `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
-                            color: 'white',
-                            borderRadius: 4,
-                            cursor: 'default',
-                            transition: 'transform 200ms ease-in-out, box-shadow 200ms ease-in-out',
-                            '&:hover': {
-                                transform: 'translateY(-4px)',
-                                boxShadow: '0 12px 24px rgba(59, 130, 246, 0.3)',
-                            }
-                        }}
-                    >
-                        <CardContent sx={{ p: 3 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                                <AccountBalance sx={{ fontSize: 28, opacity: 0.9 }} />
-                                <Typography variant="subtitle1" sx={{ opacity: 0.9, fontWeight: 500 }}>
-                                    {t('dashboard.total_expense')}
-                                </Typography>
-                            </Box>
-                            <Typography variant="h3" sx={{ fontWeight: 700, fontFamily: 'Poppins, sans-serif' }}>
-                                ¥{stats.total_expense.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </Typography>
-                            {(stats.refund_total || stats.gross_expense) && (
-                                <Typography variant="body2" sx={{ opacity: 0.85, mt: 0.5 }}>
-                                    {stats.gross_expense !== undefined && (
-                                        <>
-                                            {t('dashboard.gross_expense')}: ¥{stats.gross_expense.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </>
-                                    )}
-                                    {stats.refund_total !== undefined && stats.refund_total !== 0 && (
-                                        <>
-                                            {stats.gross_expense !== undefined ? ' · ' : ''}
-                                            {t('dashboard.refund_total')}: ¥{Math.abs(stats.refund_total).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </>
-                                    )}
-                                </Typography>
-                            )}
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
-
-            {/* Charts Section */}
-            <Grid container spacing={3}>
-                {/* Bar Chart */}
-                <Grid size={{ xs: 12, lg: 6 }}>
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 3,
-                            borderRadius: 4,
-                            border: `1px solid ${colors.border.main}`,
-                            height: { xs: 400, md: 500 },
-                            display: 'flex',
-                            flexDirection: 'column',
-                            transition: 'box-shadow 200ms ease-in-out',
-                            '&:hover': {
-                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-                            }
-                        }}
-                    >
-                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            {t('dashboard.bar_title')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            {t('dashboard.bar_helper')}
-                        </Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%', cursor: 'pointer' }}>
-                            <BarChart
-                                dataset={stats.category_summary}
-                                layout="horizontal"
-                                yAxis={[{
-                                    scaleType: 'band',
-                                    dataKey: 'Category',
-                                    tickLabelStyle: {
-                                        fontSize: 12,
-                                    }
-                                }]}
-                                xAxis={[{
-                                    valueFormatter: (value: number) => {
-                                        if (value >= 10000) return `${(value / 10000).toFixed(1)}万`;
-                                        if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-                                        return value.toString();
-                                    },
-                                }]}
-                                series={[{
-                                    dataKey: 'Amount',
-                                    label: t('transactions.table.amount') + ' (¥)',
-                                    color: colors.primary.main,
-                                    valueFormatter: (value) => value ? `¥${value.toLocaleString()}` : '',
-                                }]}
-                                onItemClick={handleItemClick}
-                                margin={{ left: 70, bottom: 40, right: 80, top: 20 }}
-                                grid={{ vertical: true }}
-                            />
-                        </Box>
-                    </Paper>
-                </Grid>
-
-                {/* Pie Chart */}
-                <Grid size={{ xs: 12, lg: 6 }}>
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 3,
-                            borderRadius: 4,
-                            border: `1px solid ${colors.border.main}`,
-                            height: { xs: 400, md: 500 },
-                            display: 'flex',
-                            flexDirection: 'column',
-                            transition: 'box-shadow 200ms ease-in-out',
-                            '&:hover': {
-                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-                            }
-                        }}
-                    >
-                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            {t('dashboard.pie_title')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            {t('dashboard.pie_helper')}
-                        </Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
-                            <PieChart
-                                series={[
-                                    {
-                                        data: pieChartData,
-                                        highlightScope: { fade: 'global', highlight: 'item' },
-                                        faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-                                        innerRadius: 40,
-                                        outerRadius: 140,
-                                        paddingAngle: 2,
-                                        cornerRadius: 6,
-                                    },
-                                ]}
-                                onItemClick={handleItemClick}
-                                margin={{ right: 180, left: 80 }}
-                            />
-                        </Box>
-                    </Paper>
-                </Grid>
-
-                {/* Card Usage Chart */}
-                <Grid size={{ xs: 12, lg: 6 }}>
-                    <Paper
-                        elevation={0}
-                        sx={{
-                            p: 3,
-                            borderRadius: 4,
-                            border: `1px solid ${colors.border.main}`,
-                            height: { xs: 400, md: 500 },
-                            display: 'flex',
-                            flexDirection: 'column',
-                            transition: 'box-shadow 200ms ease-in-out',
-                            '&:hover': {
-                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.08)',
-                            }
-                        }}
-                    >
-                        <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                            {t('dashboard.card_title')}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>
-                            {t('dashboard.card_helper')}
-                        </Typography>
-                        <Box sx={{ flexGrow: 1, width: '100%', display: 'flex', justifyContent: 'center', cursor: 'pointer' }}>
-                            {stats.card_summary && stats.card_summary.length > 0 ? (
-                                <PieChart
-                                    series={[
-                                        {
-                                            data: stats.card_summary.map((item: CardSummary, index: number) => ({
-                                                id: index,
-                                                value: item.Amount,
-                                                label: `尾号 ${item.CardLastFour || '未知'}`,
-                                                color: CHART_COLORS[(index + 3) % CHART_COLORS.length]
-                                            })),
-                                            highlightScope: { fade: 'global', highlight: 'item' },
-                                            faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
-                                            innerRadius: 40,
-                                            outerRadius: 140,
-                                            paddingAngle: 2,
-                                            cornerRadius: 6,
-                                        },
-                                    ]}
-                                    margin={{ right: 200, left: 100 }}
-                                />
-                            ) : (
-                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                                    <Typography color="text.secondary">{t('common.no_card_data')}</Typography>
-                                </Box>
-                            )}
-                        </Box>
-                    </Paper>
-                </Grid>
-            </Grid>
-
-            {/* Category Details Dialog */}
-            <Dialog
-                open={openDialog}
-                onClose={() => setOpenDialog(false)}
-                maxWidth="md"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: 3 }
-                }}
-            >
-                <DialogTitle sx={{ pb: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {selectedCategory} {t('dashboard.detail_title')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                        {t('dashboard.total_transactions').replace('{count}', categoryTransactions.length.toString())}
-                    </Typography>
-                </DialogTitle>
-                <DialogContent dividers sx={{ p: 0 }}>
-                    {loadingDetails ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
-                            <CircularProgress />
-                        </Box>
-                    ) : (
-                        <TableContainer>
-                            <Table size="small" sx={{ minWidth: 500 }}>
-                                <TableHead>
-                                    <TableRow sx={{ backgroundColor: 'background.default' }}>
-                                        <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.date')}</TableCell>
-                                        <TableCell sx={{ fontWeight: 600 }}>{t('transactions.table.desc')}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 600 }}>{t('transactions.table.amount')}</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {categoryTransactions.map((tx) => (
-                                        <TableRow
-                                            key={tx.id}
-                                            sx={{
-                                                '&:hover': { backgroundColor: 'action.hover' },
-                                                transition: 'background-color 150ms ease-in-out',
-                                            }}
-                                        >
-                                            <TableCell>{new Date(tx.date).toLocaleDateString('zh-CN')}</TableCell>
-                                            <TableCell>{tx.description}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main' }}>
-                                                ¥{tx.amount.toFixed(2)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {categoryTransactions.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={3} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                                                {t('common.no_data')}
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
-                </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setOpenDialog(false)} variant="outlined">
-                        {t('common.close')}
-                    </Button>
-                </DialogActions>
-            </Dialog>
-        </Box>
-    );
+  const navigate = useNavigate();
+  const [month, setMonth] = useState(currentMonth);
+  const [data, setData] = useState<Overview | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const load = () => api.get<Overview>('/analytics/overview', { params: { month } }).then((r) => setData(r.data)).catch(() => setError('暂时无法加载家庭数据'));
+    void load();
+    window.addEventListener('finance-data-changed', load);
+    return () => window.removeEventListener('finance-data-changed', load);
+  }, [month]);
+  const metrics = data?.metrics;
+  return (
+    <Box>
+      <PageHeader title="家庭财务总览" subtitle="从资产、收入与支出三个角度，看清这个月的家庭财务状态。"
+        actions={<Stack direction="row" gap={1}><Button variant="contained" startIcon={<AutoAwesomeOutlined />} onClick={() => window.dispatchEvent(new CustomEvent('open-smart-entry'))}>智能录入</Button><Select size="small" value={month} onChange={(event) => setMonth(event.target.value)} sx={{ bgcolor: '#fff', minWidth: 138 }}><MenuItem value={currentMonth}>{currentMonth.replace('-', ' 年 ')} 月</MenuItem></Select></Stack>} />
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Grid container spacing={1.8}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="家庭总资产" value={money(metrics?.total_assets_cents ?? 0)} hint="以最新资产快照计算" icon={<AccountBalanceWalletOutlined />} loading={!data} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月收入" value={money(metrics?.income_cents ?? 0)} hint="不包含账户间转账" icon={<TrendingUpOutlined />} tone="green" loading={!data} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月支出" value={money(metrics?.expense_cents ?? 0)} hint="已扣除支出退款" icon={<PaidOutlined />} tone="orange" loading={!data} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月现金结余" value={money(metrics?.balance_cents ?? 0)} hint="收入减去净支出" icon={<SavingsOutlined />} tone="violet" loading={!data} /></Grid>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <SectionCard title="家庭资产趋势" subtitle="最近 6 个月的月末资产快照" minHeight={330}>
+            <ResponsiveContainer width="100%" height={245}>
+              <AreaChart data={data?.asset_trend ?? []}><defs><linearGradient id="assetFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3976D8" stopOpacity=".24" /><stop offset="100%" stopColor="#3976D8" stopOpacity=".02" /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EDF0F4" /><XAxis dataKey="month" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} /><YAxis tickFormatter={shortMoney} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={72} /><Tooltip formatter={(value) => money(Number(value))} /><Area type="monotone" dataKey="value_cents" stroke="#3976D8" strokeWidth={2.5} fill="url(#assetFill)" /></AreaChart>
+            </ResponsiveContainer>
+          </SectionCard>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <SectionCard title="资产结构" subtitle="按资产类别汇总" action={<Button size="small" endIcon={<ArrowForwardRounded />} onClick={() => navigate('/assets')}>查看明细</Button>} minHeight={330}>
+            {data?.asset_structure.length ? <Stack direction="row" alignItems="center" gap={1}>
+              <ResponsiveContainer width="46%" height={210}><PieChart><Pie data={data.asset_structure} dataKey="value_cents" nameKey="name" innerRadius={48} outerRadius={73} paddingAngle={2}>{data.asset_structure.map((_, index) => <Cell key={index} fill={colors[index % colors.length]} />)}</Pie><Tooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer>
+              <Stack gap={1.1} flex={1}>{data.asset_structure.slice(0, 5).map((item, index) => <Box key={item.name}><Stack direction="row" justifyContent="space-between"><Typography variant="caption"><Box component="span" sx={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, bgcolor: colors[index % colors.length], mr: .8 }} />{item.name}</Typography><Typography variant="caption" fontWeight={700}>{shortMoney(item.value_cents)}</Typography></Stack></Box>)}</Stack>
+            </Stack> : <EmptyState title="还没有资产数据" description="添加第一项资产后，这里会显示家庭资产结构。" />}
+          </SectionCard>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <SectionCard title="收入与支出趋势" subtitle="转账不计入收支">
+            <ResponsiveContainer width="100%" height={235}><BarChart data={data?.cashflow_trend ?? []} barGap={3}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EDF0F4" /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} /><YAxis tickFormatter={shortMoney} axisLine={false} tickLine={false} tick={{ fontSize: 11 }} width={72} /><Tooltip formatter={(value) => money(Number(value))} /><Bar dataKey="income_cents" name="收入" fill="#4FA37C" radius={[4, 4, 0, 0]} /><Bar dataKey="expense_cents" name="支出" fill="#E28A65" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+          </SectionCard>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <SectionCard title="本月主要收支" subtitle="按分类显示金额较大的项目">
+            <Typography variant="caption" fontWeight={700} color="success.main">收入 TOP</Typography>
+            <Stack gap={1} sx={{ mt: 1, mb: 2 }}>{(data?.top_income ?? []).slice(0, 3).map((item) => <Stack key={item.name} direction="row" justifyContent="space-between"><Typography variant="body2">{item.name}</Typography><Typography variant="body2" fontWeight={700}>{shortMoney(item.value_cents)}</Typography></Stack>)}{!data?.top_income.length && <Typography variant="caption" color="text.secondary">暂无收入</Typography>}</Stack>
+            <Typography variant="caption" fontWeight={700} color="warning.main">支出 TOP</Typography>
+            <Stack gap={1.2} sx={{ mt: 1 }}>{(data?.top_expense ?? []).slice(0, 3).map((item) => <Box key={item.name}><Stack direction="row" justifyContent="space-between"><Typography variant="body2">{item.name}</Typography><Typography variant="body2" fontWeight={700}>{shortMoney(item.value_cents)}</Typography></Stack><LinearProgress variant="determinate" value={item.value_cents / Math.max(1, data?.top_expense[0]?.value_cents ?? 1) * 100} sx={{ mt: .5, height: 4, bgcolor: '#F2F3F5', '& .MuiLinearProgress-bar': { bgcolor: '#E28A65' } }} /></Box>)}</Stack>
+          </SectionCard>
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <SectionCard title="需要关注" subtitle="尚未更新或仍待人工确认的项目">
+            <Stack direction={{ xs: 'column', md: 'row' }} gap={1.2}>
+              <Chip icon={<WarningAmberRounded />} label={`${data?.attention.stale_assets.length ?? 0} 项资产快照待更新`} onClick={() => navigate('/assets?status=stale')} sx={{ justifyContent: 'flex-start', bgcolor: '#FFF7E9' }} />
+              <Chip icon={<WarningAmberRounded />} label={`${data?.attention.pending_review_count ?? 0} 条智能录入待复核`} onClick={() => window.dispatchEvent(new CustomEvent('open-review-center'))} sx={{ justifyContent: 'flex-start', bgcolor: '#EEF4FF' }} />
+            </Stack>
+          </SectionCard>
+        </Grid>
+      </Grid>
+    </Box>
+  );
 }

@@ -23,12 +23,18 @@ Beyond simple charts, our AI Agent acts as your personal CFO:
 - **Transaction Management**: Search, filter, and manually adjust any transaction record.
 - **Portfolio Tracking**: Keep track of your investment assets alongside your expenses.
 
+### 4. 📅 Long-term Monthly Expense Ledger
+- Transactions are assigned to calendar months by their actual transaction date, with statement imports tracked separately.
+- The dashboard shows monthly net/gross spend, refunds, and category trends, with an explicit open/complete month status.
+- Bill ingestion follows original-text preview with a manual privacy check, intelligent extraction, and category-based posting. The system does not automatically redact or alter source text. The same file may be reprocessed with different models or prompts; users resolve suspected duplicates with bulk deletion.
+
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Vite, Ant Design Pro Components, MUI
 - **Backend**: Python, FastAPI, Pandas, SQLAlchemy
 - **Chat Agent Runtime**: Node.js sidecar in `agent/`, powered by `@earendil-works/pi-coding-agent`
 - **AI Integration**: LangChain for PDF transaction extraction, OpenRouter-compatible chat models for the agent
+- **Data layer**: SQLAlchemy + Alembic; CNY amounts are stored as integer cents and monthly metrics are aggregated directly in SQL
 
 ## Getting Started
 
@@ -73,6 +79,14 @@ Use the provided start script:
 ```
 
 `start.sh` starts the FastAPI backend and Vite frontend. If `agent/node_modules` is missing, it installs the Node sidecar dependencies first. `/api/chat` streams through the `agent/` pi-agent sidecar instead of the old pandas DataFrame agent.
+
+On Windows, run:
+
+```powershell
+.\start.cmd
+```
+
+The Windows launcher requires PowerShell 7 (`pwsh`), works from either Command Prompt or PowerShell, installs missing frontend and agent dependencies, and stops both development servers when you press `Ctrl+C`.
 
 ### Configuration
 

@@ -12,6 +12,7 @@ import { Type } from 'typebox';
 import {
   budgetMetrics,
   filterTransactions,
+  monthlySpendingTrend,
   summarizeTransactions,
   topMerchants,
 } from './financeTools.js';
@@ -41,7 +42,7 @@ function createFinanceTools(request: AgentRequest) {
       label: 'Filter transactions',
       description: 'Filter transactions by category, date range, amount sign, card suffix, or search text.',
       parameters: Type.Object({
-        category: Type.Optional(Type.String()),
+      categoryCode: Type.Optional(Type.String()),
         startDate: Type.Optional(Type.String()),
         endDate: Type.Optional(Type.String()),
         amountSign: Type.Optional(Type.Union([
@@ -69,18 +70,30 @@ function createFinanceTools(request: AgentRequest) {
       label: 'Budget metrics',
       description: 'Calculate spending, savings rate, and investment-to-income ratio.',
       parameters: Type.Object({
-        monthlyIncome: Type.Optional(Type.Number()),
-        investments: Type.Optional(Type.Number()),
+        monthlyIncomeCents: Type.Optional(Type.Number()),
+        investmentsCents: Type.Optional(Type.Number()),
+        month: Type.Optional(Type.String()),
       }),
       execute: async (_toolCallId, params) => asToolText(budgetMetrics(request.transactions, {
-        monthlyIncome: params.monthlyIncome ?? request.financialContext.monthlyIncome,
-        investments: params.investments ?? request.financialContext.investments,
+        monthlyIncomeCents: params.monthlyIncomeCents ?? request.financialContext.monthlyIncomeCents,
+        investmentsCents: params.investmentsCents ?? request.financialContext.investmentsCents,
+        month: params.month,
       })),
+    }),
+    defineTool({
+      name: 'monthly_spending_trend',
+      label: 'Monthly spending trend',
+      description: 'Return deterministic monthly gross, refund, and net spending totals.',
+      parameters: Type.Object({
+        startMonth: Type.Optional(Type.String()),
+        endMonth: Type.Optional(Type.String()),
+      }),
+      execute: async (_toolCallId, params) => asToolText(monthlySpendingTrend(request.transactions, params)),
     }),
     createPythonCalculationTool({
       transactions: request.transactions,
-      monthlyIncome: request.financialContext.monthlyIncome,
-      investments: request.financialContext.investments,
+      monthlyIncomeCents: request.financialContext.monthlyIncomeCents,
+      investmentsCents: request.financialContext.investmentsCents,
     }),
   ];
 }
@@ -88,7 +101,7 @@ function createFinanceTools(request: AgentRequest) {
 export function getFinanceSystemPrompt(): string {
   return [
     'You are a personal finance analysis assistant.',
-    'All money amounts are Chinese yuan (CNY, 人民币, ¥), never US dollars.',
+    'All money amounts are Chinese yuan (CNY, 人民币, ¥), never US dollars. Transaction values are stored in cents.',
     'Use the deterministic finance tools for transaction facts before answering.',
     'Use execute_python for arithmetic, ratios, projections, budget scenarios, and any calculation that could be error-prone.',
     'Answer concisely in the user language.',

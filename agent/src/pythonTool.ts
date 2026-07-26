@@ -10,8 +10,8 @@ const MAX_CODE_CHARS = 8_000;
 export interface PythonCalculationInput {
   code: string;
   transactions: FinanceTransaction[];
-  monthlyIncome: number;
-  investments: number;
+  monthlyIncomeCents: number;
+  investmentsCents: number;
   timeoutMs?: number;
 }
 
@@ -53,8 +53,8 @@ allowed_builtins = {
 scope = {
     "__builtins__": allowed_builtins,
     "transactions": payload["transactions"],
-    "monthly_income": payload["monthlyIncome"],
-    "investments": payload["investments"],
+    "monthly_income_cents": payload["monthlyIncomeCents"],
+    "investments_cents": payload["investmentsCents"],
     "currency": "CNY",
     "currency_name": "人民币",
     "math": math,
@@ -79,8 +79,8 @@ function trimOutput(value: string): string {
 export async function executePythonCalculation({
   code,
   transactions,
-  monthlyIncome,
-  investments,
+  monthlyIncomeCents,
+  investmentsCents,
   timeoutMs = PYTHON_TIMEOUT_MS,
 }: PythonCalculationInput): Promise<unknown> {
   if (code.length > MAX_CODE_CHARS) {
@@ -126,24 +126,24 @@ export async function executePythonCalculation({
     child.stdin.end(JSON.stringify({
       code,
       transactions,
-      monthlyIncome,
-      investments,
+      monthlyIncomeCents,
+      investmentsCents,
     }));
   });
 }
 
 export function createPythonCalculationTool(context: {
   transactions: FinanceTransaction[];
-  monthlyIncome: number;
-  investments: number;
+  monthlyIncomeCents: number;
+  investmentsCents: number;
 }) {
   return defineTool({
     name: 'execute_python',
     label: 'Execute Python',
     description: [
       'Run a short, deterministic Python calculation over the provided finance data.',
-      'The variables transactions, monthly_income, investments, currency, currency_name, math, and statistics are available.',
-      'Assign the final JSON-serializable answer to result. All money amounts are Chinese yuan (CNY/人民币).',
+      'The variables transactions, monthly_income_cents, investments_cents, currency, currency_name, math, and statistics are available.',
+      'Assign the final JSON-serializable answer to result. All money amounts are Chinese yuan cents (CNY/人民币分).',
     ].join(' '),
     parameters: Type.Object({
       code: Type.String({
@@ -154,8 +154,8 @@ export function createPythonCalculationTool(context: {
       const result = await executePythonCalculation({
         code: params.code,
         transactions: context.transactions,
-        monthlyIncome: context.monthlyIncome,
-        investments: context.investments,
+        monthlyIncomeCents: context.monthlyIncomeCents,
+        investmentsCents: context.investmentsCents,
       });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],

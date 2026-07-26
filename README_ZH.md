@@ -9,7 +9,7 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 ### 1. 💳 智能信用卡账单分析
 告别手动录入。Smart Finance 允许您：
 - **解析 PDF 账单**: 直接上传您的信用卡账单 (PDF)。
-- **隐私优先提取**: 在发送数据进行分析之前，自动提取交易详情并匿名化敏感文本。
+- **手动隐私检查**: 在发送数据进行分析之前，可在预览框中手动删除不希望发送给模型的敏感文本。
 - **AI 智能分类**: 使用高智商模型 (如 Qwen-Max/Gemini) 将混乱的商户名称准确分类为清晰的类别 (例如 "餐饮"、"交通"、"购物")。
 
 ### 2. 🤖 AI Agent 支出分析
@@ -23,12 +23,18 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 - **交易管理**: 搜索、过滤并手动调整任何交易记录。
 - **投资组合追踪**: 在通过支出管理之外，同时追踪您的投资资产。
 
+### 4. 📅 长期月度支出账本
+- 每笔交易按实际发生日期归属自然月，并保留独立的账单导入批次。
+- 仪表盘提供月度净支出、毛支出、退款和分类趋势，并支持标记月份是否已完成上传。
+- 账单上传采用“原文预览与手动隐私检查 → 智能识别 → 分类入账”流程；系统不会自动修改原文。允许同一文件使用不同模型或提示词重复识别，疑似重复记录由用户通过批量删除自行处理。
+
 ## 技术栈
 
 - **前端**: React, TypeScript, Vite, Ant Design Pro Components, MUI
 - **后端**: Python, FastAPI, Pandas, SQLAlchemy
 - **Chat Agent 运行时**: `agent/` 目录下的 Node.js sidecar，基于 `@earendil-works/pi-coding-agent`
 - **AI 集成**: LangChain 用于 PDF 交易抽取，OpenRouter 兼容模型用于聊天 Agent
+- **数据层**: SQLAlchemy + Alembic，金额以人民币分整数保存，月度指标通过 SQL 实时聚合
 
 ## 快速开始
 
@@ -73,6 +79,14 @@ Smart Finance 是一个智能个人理财系统，旨在自动化繁琐的记账
 ```
 
 `start.sh` 会启动 FastAPI 后端和 Vite 前端。如果 `agent/node_modules` 不存在，会先安装 Node sidecar 依赖。`/api/chat` 现在通过 `agent/` 下的 pi-agent sidecar 流式响应，不再使用旧的 pandas DataFrame agent。
+
+Windows 下请运行：
+
+```powershell
+.\start.cmd
+```
+
+Windows 启动器需要 PowerShell 7（`pwsh`），可在命令提示符或 PowerShell 中使用，会自动安装缺失的前端和 Agent 依赖；按 `Ctrl+C` 时会同时停止两个开发服务。
 
 ### 配置
 

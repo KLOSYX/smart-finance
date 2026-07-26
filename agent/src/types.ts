@@ -1,10 +1,10 @@
 export interface FinanceTransaction {
   date: string | null;
   description: string;
-  amount: number;
-  category: string;
-  source: string | null;
+  amountCents: number;
+  categoryCode: string;
   cardLastFour: string | null;
+  importId: number | null;
 }
 
 export interface ChatHistoryMessage {
@@ -17,14 +17,10 @@ export interface AgentRequest {
   history: ChatHistoryMessage[];
   language: 'zh' | 'en' | string;
   financialContext: {
-    monthlyIncome: number;
-    investments: number;
+    monthlyIncomeCents: number;
+    investmentsCents: number;
   };
-  llm: {
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-  };
+  llm: { apiKey: string; baseUrl: string; model: string };
   transactions: FinanceTransaction[];
 }
 

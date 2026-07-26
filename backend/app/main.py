@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import endpoints
-from app.core.database import init_db
+from app.core.database import ensure_database
 
 app = FastAPI(title="Smart Finance API")
 
@@ -14,8 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize DB
-init_db()
+# Upgrade the database before serving requests. The migration is one-way and
+# creates a timestamped backup when it encounters a pre-ledger SQLite file.
+ensure_database()
 
 app.include_router(endpoints.router, prefix="/api")
 

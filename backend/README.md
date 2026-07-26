@@ -9,7 +9,7 @@ The FastAPI-based backend for the Smart Finance application, handling transactio
 - **Privacy First**: Automatically masks sensitive information before processing.
 - **AI Analysis**: Uses LangChain and OpenAI Models to classify transactions.
 - **Financial Advice**: Generates personalized financial insights.
-- **Database**: SQLite storage with SQLAlchemy ORM.
+- **Database**: SQLite storage with SQLAlchemy ORM and Alembic migrations. Amounts are stored as integer CNY cents, with statement imports and monthly completion states.
 
 ## Setup
 
@@ -20,8 +20,9 @@ The FastAPI-based backend for the Smart Finance application, handling transactio
 
 2. Run the development server:
    ```bash
-   uv run uvicorn app.main:app --reload --port 8000
+   uv run python -c 'from app.core.database import ensure_database; ensure_database()'
+   uv run uvicorn app.main:app --port 8008
    ```
 
-   - API Base URL: `http://localhost:8000`
-   - Interactive Docs: `http://localhost:8000/docs`
+   - API Base URL: `http://localhost:8008`
+   - Interactive Docs: `http://localhost:8008/docs`

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.services import pi_agent_client
 from app.services.pi_agent_client import parse_agent_event, render_agent_event
 
 
@@ -49,6 +50,21 @@ def test_render_error_event_returns_agent_error():
     assert (
         render_agent_event({"type": "error", "message": "boom"}) == "Agent Error: boom"
     )
+
+
+def test_agent_command_uses_node_and_local_tsx(monkeypatch):
+    monkeypatch.setattr(pi_agent_client.os, "name", "nt")
+    monkeypatch.setattr(
+        pi_agent_client.shutil,
+        "which",
+        lambda name: r"C:\Program Files\nodejs\node.exe"
+        if name == "node.exe"
+        else None,
+    )
+    command = pi_agent_client._agent_command()
+    assert command[0].endswith("node.exe")
+    assert command[1].endswith("tsx\\dist\\cli.mjs")
+    assert command[2].endswith("src\\index.ts")
 
 
 class FakeStdout:
@@ -133,8 +149,8 @@ async def test_stream_pi_agent_chat_sends_request_and_yields_text(monkeypatch):
             api_key="key",
             base_url="https://example.test/v1",
             model="test-model",
-            monthly_income=0,
-            investments=0,
+            monthly_income_cents=0,
+            investments_cents=0,
             language="en",
         )
     ]
@@ -164,13 +180,42 @@ async def test_stream_pi_agent_chat_reports_nonzero_exit(monkeypatch):
             api_key="key",
             base_url="https://example.test/v1",
             model="test-model",
-            monthly_income=0,
-            investments=0,
+            monthly_income_cents=0,
+            investments_cents=0,
             language="en",
         )
     ]
 
     assert chunks == ["Agent Error: missing package"]
+
+
+@pytest.mark.anyio
+async def test_stream_pi_agent_chat_reports_empty_success(monkeypatch):
+    process = FakeProcess(['{"type":"done"}\n'], returncode=0)
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+
+    chunks = [
+        chunk
+        async for chunk in pi_agent_client.stream_pi_agent_chat(
+            message="hi",
+            history=[],
+            transactions=[],
+            api_key="key",
+            base_url="https://example.test/v1",
+            model="test-model",
+            monthly_income_cents=0,
+            investments_cents=0,
+            language="en",
+        )
+    ]
+
+    assert chunks == [
+        "Agent Error: Agent returned no response. Check the model configuration and try again."
+    ]
 
 
 @pytest.mark.anyio
@@ -193,8 +238,8 @@ async def test_stream_pi_agent_chat_drains_stderr_while_streaming(monkeypatch):
             api_key="key",
             base_url="https://example.test/v1",
             model="test-model",
-            monthly_income=0,
-            investments=0,
+            monthly_income_cents=0,
+            investments_cents=0,
             language="en",
         )
     ]
@@ -227,8 +272,8 @@ async def test_stream_pi_agent_chat_terminates_process_when_generator_closes(
         api_key="key",
         base_url="https://example.test/v1",
         model="test-model",
-        monthly_income=0,
-        investments=0,
+        monthly_income_cents=0,
+        investments_cents=0,
         language="en",
     )
 
@@ -258,8 +303,8 @@ async def test_stream_pi_agent_chat_handles_broken_stdin(monkeypatch):
             api_key="key",
             base_url="https://example.test/v1",
             model="test-model",
-            monthly_income=0,
-            investments=0,
+            monthly_income_cents=0,
+            investments_cents=0,
             language="en",
         )
     ]
