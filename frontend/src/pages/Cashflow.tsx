@@ -95,7 +95,17 @@ export default function Cashflow() {
     try {
       const body = new FormData(); body.append('file', file);
       const preview = await api.post('/imports/preview', body);
-      window.dispatchEvent(new CustomEvent('open-smart-entry', { detail: { text: preview.data.text, kind: 'cashflow' } }));
+      window.dispatchEvent(new CustomEvent('open-smart-entry', {
+        detail: {
+          text: preview.data.text,
+          kind: 'cashflow',
+          source: {
+            filename: preview.data.filename,
+            content_sha256: preview.data.content_sha256,
+            source_type: preview.data.source_type,
+          },
+        },
+      }));
     } catch (e: unknown) { setError(apiErrorMessage(e, 'PDF 上传失败，请检查文件后重试')); }
     finally { setBusy(false); }
   };
@@ -195,7 +205,7 @@ export default function Cashflow() {
           </Paper>
         </Grid>
       </Grid>
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth><DialogTitle>{editing ? '编辑流水' : '新增流水'}</DialogTitle><DialogContent><Grid container spacing={2} sx={{ mt: .2 }}>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth><DialogTitle>{editing ? '编辑流水' : '新增流水'}</DialogTitle><DialogContent sx={{ pt: '14px !important' }}><Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6 }}><TextField label="日期" type="date" fullWidth value={form.transaction_date} onChange={(e) => setForm({ ...form, transaction_date: e.target.value })} slotProps={{ inputLabel: { shrink: true } }} /></Grid>
         <Grid size={{ xs: 12, sm: 6 }}><TextField select label="类型" fullWidth value={form.flow_type} onChange={(e) => { const next = e.target.value as FlowType; setForm({ ...form, flow_type: next, category_id: categories.find((item) => item.domain === (next === 'income' ? 'income' : 'expense'))?.id ?? 0 }); }}>{Object.entries(flowLabels).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</TextField></Grid>
         <Grid size={{ xs: 12 }}><TextField label="描述" fullWidth value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Grid>

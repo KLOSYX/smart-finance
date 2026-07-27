@@ -26,7 +26,12 @@ export default function Dashboard() {
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
-    const load = () => api.get<Overview>('/analytics/overview', { params: { month } }).then((r) => setData(r.data)).catch(() => setError('暂时无法加载家庭数据'));
+    const load = () => api.get<Overview>('/analytics/overview', { params: { month } })
+      .then((response) => {
+        setData(response.data);
+        setError('');
+      })
+      .catch(() => setError('暂时无法加载家庭数据'));
     void load();
     window.addEventListener('finance-data-changed', load);
     return () => window.removeEventListener('finance-data-changed', load);

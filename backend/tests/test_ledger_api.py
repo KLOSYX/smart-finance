@@ -198,6 +198,46 @@ def test_custom_category_can_be_added_and_archived(ledger_context):
     assert created["id"] not in [row["id"] for row in client.get("/api/metadata/categories").json()]
 
 
+def test_custom_categories_are_sent_to_extractor_and_can_match_by_name(
+    ledger_context, monkeypatch
+):
+    client, _ = ledger_context
+    custom = client.post(
+        "/api/metadata/categories", json={"domain": "expense", "name": "宠物"}
+    ).json()
+    captured = {}
+
+    async def fake_extract(*_args, **kwargs):
+        captured["categories"] = kwargs["categories"]
+        return [{
+            "candidate_type": "cashflow",
+            "transaction_date": "2026-07-27",
+            "description": "宠物医院",
+            "amount": 380,
+            "flow_type": "expense",
+            "category_code": "宠物",
+            "household_role": "shared",
+        }]
+
+    monkeypatch.setattr("app.api.endpoints.analyze_financial_records", fake_extract)
+    assert client.put("/api/settings", json={"api_key": "test-key"}).status_code == 200
+    response = client.post("/api/imports/extract", json={
+        "filename": "宠物消费.txt",
+        "content_sha256": "7" * 64,
+        "text": "宠物医院 380 元",
+        "source_type": "text",
+        "import_kind": "cashflow",
+        "images": [],
+    })
+
+    assert response.status_code == 200
+    assert {"domain": "expense", "code": custom["code"], "name": "宠物"} in captured["categories"]
+    assert response.json()["auto_committed_count"] == 1
+    cashflow = client.get("/api/cashflows", params={"month": "2026-07"}).json()["items"][0]
+    assert cashflow["category_id"] == custom["id"]
+    assert cashflow["category_name"] == "宠物"
+
+
 def test_pdf_preview_rejects_invalid_and_image_only_files(ledger_context, monkeypatch):
     client, _ = ledger_context
     invalid = client.post("/api/imports/preview", files={"file": ("not-a-pdf.pdf", b"not a pdf", "application/pdf")})
@@ -562,7 +602,124 @@ def test_empty_extraction_does_not_lock_content_hash(ledger_context, monkeypatch
     first = client.post("/api/imports/extract", json=payload)
     second = client.post("/api/imports/extract", json=payload)
     assert first.status_code == second.status_code == 422
-    assert "未被标记为已导入" in first.json()["detail"]
+    assert "修改录入指令后重新提交" in first.json()["detail"]
+
+    history = client.get("/api/imports").json()
+    assert history["stats"]["failed_batches"] == 2
+    assert all(item["status"] == "failed" for item in history["items"])
+
+
+def test_failed_import_is_recorded_and_can_be_retried(ledger_context, monkeypatch):
+    client, _ = ledger_context
+    attempts = 0
+
+    async def flaky_extract(*_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("temporary provider error")
+        return [{
+            "candidate_type": "cashflow",
+            "transaction_date": "2026-07-26",
+            "description": "重试成功工资",
+            "amount": 12000,
+            "flow_type": "income",
+            "category_code": "salary",
+            "household_role": "shared",
+        }]
+
+    monkeypatch.setattr("app.api.endpoints.analyze_financial_records", flaky_extract)
+    assert client.put("/api/settings", json={"api_key": "test-key"}).status_code == 200
+    payload = {
+        "filename": "失败后重试.txt",
+        "content_sha256": "9" * 64,
+        "text": "工资 12000 元",
+        "source_type": "text",
+        "import_kind": "cashflow",
+        "images": [],
+    }
+    failed = client.post("/api/imports/extract", json=payload)
+    assert failed.status_code == 502
+
+    history = client.get("/api/imports").json()
+    assert history["stats"]["failed_batches"] == 1
+    failed_item = history["items"][0]
+    assert failed_item["status"] == "failed"
+    assert "temporary provider error" in failed_item["error_message"]
+    assert failed_item["attempt_count"] == 1
+
+    retried = client.post(f"/api/imports/{failed_item['id']}/retry")
+    assert retried.status_code == 200
+    assert retried.json()["auto_committed_count"] == 1
+    completed = client.get("/api/imports").json()
+    assert completed["stats"]["failed_batches"] == 0
+    assert completed["stats"]["committed_records"] == 1
+    assert completed["items"][0]["status"] == "committed"
+    assert completed["items"][0]["attempt_count"] == 2
+
+
+def test_completed_import_can_be_reverted_as_one_batch(ledger_context, monkeypatch):
+    client, _ = ledger_context
+    asset_category_id = _category_id(client, "asset", "demand_deposit")
+    asset = client.post("/api/assets", json={
+        "name": "家庭活期",
+        "category_id": asset_category_id,
+        "channel": "招商银行",
+        "household_role": "shared",
+        "current_value_cents": 100_000,
+        "valuation_date": "2026-07-26",
+    })
+    assert asset.status_code == 200
+
+    async def fake_extract(*_args, **_kwargs):
+        return [
+            {
+                "candidate_type": "cashflow",
+                "transaction_date": "2026-07-26",
+                "description": "批次工资",
+                "amount": 12000,
+                "flow_type": "income",
+                "category_code": "salary",
+                "household_role": "shared",
+            },
+            {
+                "candidate_type": "asset_snapshot",
+                "name": "家庭活期",
+                "valuation_date": "2026-07-26",
+                "value": 1500,
+                "category_code": "demand_deposit",
+                "channel": "招商银行",
+                "household_role": "shared",
+            },
+        ]
+
+    monkeypatch.setattr("app.api.endpoints.analyze_financial_records", fake_extract)
+    assert client.put("/api/settings", json={"api_key": "test-key"}).status_code == 200
+    imported = client.post("/api/imports/extract", json={
+        "filename": "可撤回批次.pdf",
+        "content_sha256": "8" * 64,
+        "text": "工资与资产余额",
+        "source_type": "pdf",
+        "import_kind": "mixed",
+        "images": [],
+    })
+    assert imported.status_code == 200
+    import_id = imported.json()["import_id"]
+    assert imported.json()["auto_committed_count"] == 2
+    assert client.get("/api/assets").json()[0]["current_value_cents"] == 150_000
+    assert client.get("/api/cashflows", params={"month": "2026-07"}).json()["total"] == 1
+
+    reverted = client.post(f"/api/imports/{import_id}/revert")
+    assert reverted.status_code == 200
+    assert reverted.json()["status"] == "reverted"
+    assert reverted.json()["reverted_count"] == 2
+    assert reverted.json()["committed_count"] == 0
+    assert client.get("/api/assets").json()[0]["current_value_cents"] == 100_000
+    assert client.get("/api/cashflows", params={"month": "2026-07"}).json()["total"] == 0
+
+    history = client.get("/api/imports").json()
+    assert history["stats"]["reverted_batches"] == 1
+    assert history["items"][0]["status"] == "reverted"
 
 
 def test_existing_import_marker_does_not_block_same_hash(ledger_context, monkeypatch):

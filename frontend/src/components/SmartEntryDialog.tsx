@@ -14,11 +14,18 @@ import { CandidateReviewList, type Candidate } from './ReviewCenter';
 
 export type ImportKind = 'cashflow' | 'asset' | 'mixed' | '';
 
+interface SmartEntrySource {
+  filename: string;
+  content_sha256: string;
+  source_type: 'pdf' | 'text' | 'file';
+}
+
 interface OpenSmartEntryDetail {
   text?: string;
   instruction?: string;
   images?: ImageAttachment[];
   kind?: ImportKind;
+  source?: SmartEntrySource;
 }
 
 const importKindLabels: Record<Exclude<ImportKind, ''>, string> = {
@@ -34,6 +41,7 @@ export default function SmartEntryDialog() {
   const [instruction, setInstruction] = useState('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [kind, setKind] = useState<ImportKind>('');
+  const [sourcePreview, setSourcePreview] = useState<SmartEntrySource | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [importId, setImportId] = useState<number | null>(null);
@@ -49,6 +57,7 @@ export default function SmartEntryDialog() {
     setInstruction(detail.instruction ?? '');
     setImages(detail.images ?? []);
     setKind(detail.kind ?? '');
+    setSourcePreview(detail.source ?? null);
     setCandidates([]);
     setImportId(null);
     setError('');
@@ -73,6 +82,7 @@ export default function SmartEntryDialog() {
   const announceChange = () => {
     window.dispatchEvent(new CustomEvent('review-queue-changed'));
     window.dispatchEvent(new CustomEvent('finance-data-changed'));
+    window.dispatchEvent(new CustomEvent('import-history-changed'));
   };
 
   const extract = async () => {
@@ -88,6 +98,8 @@ export default function SmartEntryDialog() {
           text,
           source_type: 'file',
         };
+      } else if (sourcePreview) {
+        source = { ...sourcePreview, text };
       } else {
         const preview = await api.post('/imports/text-preview', { text, filename: '智能录入文本' });
         source = preview.data;
@@ -154,7 +166,12 @@ export default function SmartEntryDialog() {
 
   return (
     <Dialog open={open} onClose={close} maxWidth="md" fullWidth>
-      <DialogTitle>智能录入</DialogTitle>
+      <DialogTitle>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="h6" fontWeight={850}>智能录入</Typography>
+          <Button size="small" onClick={() => window.dispatchEvent(new CustomEvent('open-import-history'))}>查看录入历史</Button>
+        </Stack>
+      </DialogTitle>
       <DialogContent>
         <Stack gap={2} sx={{ mt: 0.5 }}>
           {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}

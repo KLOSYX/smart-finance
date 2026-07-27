@@ -152,7 +152,7 @@ class ReviewCandidateResponse(BaseModel):
     id: int
     candidate_type: Literal["cashflow", "asset_snapshot"]
     payload: dict[str, Any]
-    status: Literal["pending", "confirmed", "ignored"]
+    status: Literal["pending", "confirmed", "ignored", "reverted"]
 
 
 class ImportExtractResponse(BaseModel):
@@ -195,8 +195,40 @@ class ImportSummary(BaseModel):
     import_kind: str
     status: str
     imported_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None
+    error_message: str | None
+    attempt_count: int
     candidate_count: int
     committed_count: int
+    pending_count: int
+    ignored_count: int
+    reverted_count: int
+    failed_count: int
+
+
+class ImportHistoryStats(BaseModel):
+    total_batches: int
+    processing_batches: int
+    review_batches: int
+    completed_batches: int
+    discarded_batches: int
+    reverted_batches: int
+    failed_batches: int
+    total_records: int
+    committed_records: int
+    pending_records: int
+    ignored_records: int
+    failed_records: int
+
+
+class ImportHistoryResponse(BaseModel):
+    stats: ImportHistoryStats
+    items: list[ImportSummary]
+
+
+class ImportDetailResponse(ImportSummary):
+    candidates: list[ReviewCandidateResponse]
 
 
 class SettingsUpdate(BaseModel):

@@ -52,6 +52,11 @@ class ImportBatch(Base):
     period_start = Column(Date, nullable=True)
     period_end = Column(Date, nullable=True)
     imported_at = Column(DateTime, nullable=False, default=utcnow)
+    updated_at = Column(DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    error_message = Column(Text, nullable=True)
+    request_payload_json = Column(Text, nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=1)
 
     cashflows = relationship(
         "Cashflow", back_populates="import_batch", passive_deletes=True
@@ -162,6 +167,7 @@ class ReviewCandidate(Base):
     payload_json = Column(Text, nullable=False)
     confidence = Column(Float, nullable=False, default=0)
     warning = Column(String, nullable=True)
+    undo_payload_json = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="pending", index=True)
     created_at = Column(DateTime, nullable=False, default=utcnow)
 

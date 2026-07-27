@@ -28,6 +28,9 @@ def test_multimodal_prompt_keeps_instruction_separate_from_source(monkeypatch):
             "mime_type": "image/png",
             "data_url": "data:image/png;base64,aGVsbG8=",
         }],
+        categories=[
+            {"domain": "expense", "code": "custom_pet", "name": "宠物"},
+        ],
     ))
 
     assert result == []
@@ -36,6 +39,9 @@ def test_multimodal_prompt_keeps_instruction_separate_from_source(monkeypatch):
     assert "amount 必须转换为正数" in system_message.content
     assert "退款用 expense_refund" in system_message.content
     assert "禁止输出负数" in system_message.content
+    assert '"code": "custom_pet"' in system_message.content
+    assert '"name": "宠物"' in system_message.content
+    assert "将对应的 code 原样写入 category_code" in system_message.content
     assert "若与数据矛盾则以实际数据为准" in human_message.content[0]["text"]
     assert isinstance(human_message.content, list)
     text_part, image_part = human_message.content

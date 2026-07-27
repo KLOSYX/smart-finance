@@ -40,6 +40,9 @@ from app.schemas import (
     ImportCommitRequest,
     ImportExtractRequest,
     ImportExtractResponse,
+    ImportDetailResponse,
+    ImportHistoryResponse,
+    ImportHistoryStats,
     ImportPreview,
     ImportSummary,
     ReviewBatchResponse,
@@ -152,22 +155,31 @@ def _category(
 
 
 def _category_by_code(db: Session, code: str | None, domain: str) -> Category:
-    normalized = (
-        normalize_legacy_expense_category(code)
-        if domain == "expense"
-        else str(code or "").strip().lower()
-    )
+    raw = str(code or "").strip()
+    normalized = raw.lower()
     if domain == "asset" and normalized == "social_security":
         normalized = "provident_fund"
-    row = (
+    active_rows = (
         db.query(Category)
         .filter(
             Category.domain == domain,
-            Category.code == normalized,
             Category.is_archived.is_(False),
         )
-        .first()
+        .all()
     )
+    row = next(
+        (
+            category
+            for category in active_rows
+            if category.code.lower() == normalized or category.name == raw
+        ),
+        None,
+    )
+    if row is None and domain == "expense":
+        legacy_code = normalize_legacy_expense_category(raw)
+        row = next(
+            (category for category in active_rows if category.code == legacy_code), None
+        )
     if row is None:
         fallback = {
             "asset": "needs_review_asset",
@@ -646,7 +658,12 @@ def discard_review_batch(import_id: int, db: Session = Depends(get_db)):
     if batch is None or batch.status != "review":
         raise HTTPException(404, "待复核导入不存在")
     candidate_count = len(batch.review_candidates)
-    db.delete(batch)
+    for candidate in batch.review_candidates:
+        if candidate.status == "pending":
+            candidate.status = "ignored"
+    batch.status = "discarded"
+    batch.updated_at = _now()
+    batch.completed_at = _now()
     db.commit()
     return {"ok": True, "discarded_candidates": candidate_count}
 
@@ -726,19 +743,22 @@ def _commit_candidate_payload(
             )
         except (KeyError, ValueError) as exc:
             raise HTTPException(422, f"候选流水字段不完整: {candidate.id}") from exc
-        db.add(
-            Cashflow(
-                transaction_date=tx_date,
-                description=description,
-                amount_cents=amount,
-                flow_type=flow_type,
-                category_id=category.id if category else None,
-                channel=channel,
-                household_role=role,
-                card_last_four=card,
-                fingerprint=fingerprint,
-                import_id=batch.id,
-            )
+        cashflow = Cashflow(
+            transaction_date=tx_date,
+            description=description,
+            amount_cents=amount,
+            flow_type=flow_type,
+            category_id=category.id if category else None,
+            channel=channel,
+            household_role=role,
+            card_last_four=card,
+            fingerprint=fingerprint,
+            import_id=batch.id,
+        )
+        db.add(cashflow)
+        db.flush()
+        candidate.undo_payload_json = json.dumps(
+            {"kind": "cashflow", "cashflow_id": cashflow.id}
         )
         candidate.status = "confirmed"
         return tx_date, True
@@ -763,7 +783,8 @@ def _commit_candidate_payload(
         )
         .first()
     )
-    if asset is None:
+    asset_created = asset is None
+    if asset_created:
         asset = Asset(
             name=name, category_id=category.id, channel=channel, household_role=role
         )
@@ -780,6 +801,9 @@ def _commit_candidate_payload(
             )
             .first()
         )
+    snapshot_created = snapshot is None
+    previous_value_cents = snapshot.value_cents if snapshot else None
+    previous_source = snapshot.source if snapshot else None
     if snapshot:
         snapshot.value_cents = value_cents
         snapshot.source = "import"
@@ -791,19 +815,39 @@ def _commit_candidate_payload(
             source="import",
         )
         db.add(snapshot)
+    db.flush()
     pending_asset_snapshots[snapshot_key] = snapshot
+    candidate.undo_payload_json = json.dumps(
+        {
+            "kind": "asset_snapshot",
+            "asset_id": asset.id,
+            "asset_created": asset_created,
+            "snapshot_id": snapshot.id,
+            "snapshot_created": snapshot_created,
+            "previous_value_cents": previous_value_cents,
+            "previous_source": previous_source,
+            "applied_value_cents": value_cents,
+        }
+    )
     candidate.status = "confirmed"
     return valuation_date, True
 
 
-@router.post("/imports/extract", response_model=ImportExtractResponse)
-async def extract_import(request: ImportExtractRequest, db: Session = Depends(get_db)):
+async def _execute_import(
+    request: ImportExtractRequest, batch: ImportBatch, db: Session
+) -> ImportExtractResponse:
     if _setting(db, "llm_extraction_enabled", "true") != "true":
         raise HTTPException(409, "智能提取已在设置中关闭")
     api_key = _setting(db, "api_key")
     if not api_key:
         raise HTTPException(400, "请先在设置中配置 LLM API Key")
     try:
+        active_categories = (
+            db.query(Category)
+            .filter(Category.is_archived.is_(False))
+            .order_by(Category.domain, Category.is_default.desc(), Category.id)
+            .all()
+        )
         extracted = await analyze_financial_records(
             request.text,
             api_key,
@@ -812,6 +856,10 @@ async def extract_import(request: ImportExtractRequest, db: Session = Depends(ge
             request.import_kind,
             instruction=request.instruction,
             images=[image.model_dump() for image in request.images],
+            categories=[
+                {"domain": row.domain, "code": row.code, "name": row.name}
+                for row in active_categories
+            ],
         )
     except Exception as exc:
         prefix = (
@@ -820,16 +868,6 @@ async def extract_import(request: ImportExtractRequest, db: Session = Depends(ge
             else "智能提取失败"
         )
         raise HTTPException(502, f"{prefix}: {exc}") from exc
-    batch = ImportBatch(
-        filename=request.filename,
-        content_sha256=request.content_sha256,
-        source_type=request.source_type,
-        import_kind=request.import_kind,
-        status="review",
-        imported_at=_now(),
-    )
-    db.add(batch)
-    db.flush()
     pending_rows: list[ReviewCandidate] = []
     pending_asset_snapshots: dict[tuple[int, date], AssetSnapshot] = {}
     dates: list[date] = []
@@ -898,11 +936,13 @@ async def extract_import(request: ImportExtractRequest, db: Session = Depends(ge
             else:
                 auto_cashflows += 1
     if candidate_count == 0:
-        db.rollback()
         raise HTTPException(
-            422, "未识别到可录入记录；本次内容未被标记为已导入，可以修改提示后重试"
+            422, "未识别到可录入记录；可以修改录入指令后重新提交"
         )
     batch.status = "review" if pending_rows else "committed"
+    batch.error_message = None
+    batch.updated_at = _now()
+    batch.completed_at = None if pending_rows else _now()
     if dates:
         batch.period_start, batch.period_end = min(dates), max(dates)
     db.commit()
@@ -919,6 +959,79 @@ async def extract_import(request: ImportExtractRequest, db: Session = Depends(ge
         cashflow_months=sorted(cashflow_months),
         candidates=[_candidate_response(row) for row in pending_rows],
     )
+
+
+async def _run_import_with_tracking(
+    request: ImportExtractRequest, batch: ImportBatch, db: Session
+) -> ImportExtractResponse:
+    try:
+        return await _execute_import(request, batch, db)
+    except Exception as exc:
+        db.rollback()
+        tracked = db.get(ImportBatch, batch.id)
+        if tracked is None:
+            raise
+        for candidate in list(tracked.review_candidates):
+            db.delete(candidate)
+        if isinstance(exc, HTTPException):
+            message = (
+                exc.detail
+                if isinstance(exc.detail, str)
+                else json.dumps(exc.detail, ensure_ascii=False)
+            )
+        else:
+            prefix = (
+                "图片识别失败，请确认设置中的模型支持视觉输入"
+                if request.images
+                else "智能提取失败"
+            )
+            message = f"{prefix}: {exc}"
+        tracked.status = "failed"
+        tracked.error_message = message
+        tracked.updated_at = _now()
+        tracked.completed_at = _now()
+        db.commit()
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(502, message) from exc
+
+
+@router.post("/imports/extract", response_model=ImportExtractResponse)
+async def extract_import(request: ImportExtractRequest, db: Session = Depends(get_db)):
+    now = _now()
+    batch = ImportBatch(
+        filename=request.filename,
+        content_sha256=request.content_sha256,
+        source_type=request.source_type,
+        import_kind=request.import_kind,
+        status="processing",
+        imported_at=now,
+        updated_at=now,
+        request_payload_json=request.model_dump_json(),
+        attempt_count=1,
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+    return await _run_import_with_tracking(request, batch, db)
+
+
+@router.post("/imports/{import_id}/retry", response_model=ImportExtractResponse)
+async def retry_import(import_id: int, db: Session = Depends(get_db)):
+    batch = db.get(ImportBatch, import_id)
+    if batch is None or batch.status != "failed" or not batch.request_payload_json:
+        raise HTTPException(404, "可重试的失败记录不存在")
+    try:
+        request = ImportExtractRequest.model_validate_json(batch.request_payload_json)
+    except ValueError as exc:
+        raise HTTPException(422, "原始录入内容已损坏，无法重试") from exc
+    batch.status = "processing"
+    batch.error_message = None
+    batch.completed_at = None
+    batch.updated_at = _now()
+    batch.attempt_count += 1
+    db.commit()
+    return await _run_import_with_tracking(request, batch, db)
 
 
 @router.post("/imports/{import_id}/commit", response_model=ImportSummary)
@@ -951,13 +1064,91 @@ def commit_import(
         if committed_date:
             dates.append(committed_date)
     batch.status = "committed"
+    batch.error_message = None
+    batch.updated_at = _now()
+    batch.completed_at = _now()
     if dates:
         batch.period_start, batch.period_end = min(dates), max(dates)
     db.commit()
     return _import_summary(batch)
 
 
+@router.post("/imports/{import_id}/revert", response_model=ImportSummary)
+def revert_import(import_id: int, db: Session = Depends(get_db)):
+    batch = (
+        db.query(ImportBatch)
+        .options(joinedload(ImportBatch.review_candidates))
+        .filter(ImportBatch.id == import_id)
+        .first()
+    )
+    if batch is None or batch.status != "committed":
+        raise HTTPException(404, "可撤回的已完成录入不存在")
+    confirmed = [row for row in batch.review_candidates if row.status == "confirmed"]
+    if not confirmed:
+        raise HTTPException(409, "该批次没有可撤回的入账记录")
+
+    journals: list[tuple[ReviewCandidate, dict]] = []
+    for candidate in confirmed:
+        if not candidate.undo_payload_json:
+            raise HTTPException(409, "该旧批次缺少完整撤回日志，不能安全地整批撤回")
+        try:
+            journal = json.loads(candidate.undo_payload_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(409, "撤回日志已损坏，未修改任何数据") from exc
+        journals.append((candidate, journal))
+
+    # Validate every target before changing anything so withdrawal is all-or-nothing.
+    for _candidate, journal in journals:
+        if journal.get("kind") == "cashflow":
+            row = db.get(Cashflow, journal.get("cashflow_id"))
+            if row is not None and row.import_id != batch.id:
+                raise HTTPException(409, "部分收支记录已被重新归属，不能整批撤回")
+        elif journal.get("kind") == "asset_snapshot":
+            snapshot = db.get(AssetSnapshot, journal.get("snapshot_id"))
+            if snapshot is None:
+                raise HTTPException(409, "部分资产快照已被删除，不能整批撤回")
+            if snapshot.value_cents != journal.get("applied_value_cents"):
+                raise HTTPException(409, "部分资产快照已被后续修改，不能整批撤回")
+        else:
+            raise HTTPException(409, "撤回日志包含未知记录类型，未修改任何数据")
+
+    created_asset_ids: set[int] = set()
+    for candidate, journal in reversed(journals):
+        if journal["kind"] == "cashflow":
+            row = db.get(Cashflow, journal["cashflow_id"])
+            if row is not None:
+                db.delete(row)
+        else:
+            snapshot = db.get(AssetSnapshot, journal["snapshot_id"])
+            if journal["snapshot_created"]:
+                db.delete(snapshot)
+            else:
+                snapshot.value_cents = journal["previous_value_cents"]
+                snapshot.source = journal["previous_source"]
+            if journal["asset_created"]:
+                created_asset_ids.add(journal["asset_id"])
+        candidate.status = "reverted"
+
+    db.flush()
+    for asset_id in created_asset_ids:
+        asset = db.get(Asset, asset_id)
+        if asset is not None and (
+            db.query(AssetSnapshot).filter(AssetSnapshot.asset_id == asset_id).count() == 0
+        ):
+            db.delete(asset)
+    batch.status = "reverted"
+    batch.updated_at = _now()
+    batch.completed_at = _now()
+    db.commit()
+    return _import_summary(batch)
+
+
 def _import_summary(batch: ImportBatch) -> ImportSummary:
+    candidate_count = len(batch.review_candidates)
+    committed_count = sum(row.status == "confirmed" for row in batch.review_candidates)
+    pending_count = sum(row.status == "pending" for row in batch.review_candidates)
+    ignored_count = sum(row.status == "ignored" for row in batch.review_candidates)
+    reverted_count = sum(row.status == "reverted" for row in batch.review_candidates)
     return ImportSummary(
         id=batch.id,
         filename=batch.filename,
@@ -966,14 +1157,20 @@ def _import_summary(batch: ImportBatch) -> ImportSummary:
         import_kind=batch.import_kind,
         status=batch.status,
         imported_at=batch.imported_at,
-        candidate_count=len(batch.review_candidates),
-        committed_count=sum(
-            row.status == "confirmed" for row in batch.review_candidates
-        ),
+        updated_at=batch.updated_at or batch.imported_at,
+        completed_at=batch.completed_at,
+        error_message=batch.error_message,
+        attempt_count=batch.attempt_count or 1,
+        candidate_count=candidate_count,
+        committed_count=committed_count,
+        pending_count=pending_count,
+        ignored_count=ignored_count,
+        reverted_count=reverted_count,
+        failed_count=1 if batch.status == "failed" else 0,
     )
 
 
-@router.get("/imports", response_model=list[ImportSummary])
+@router.get("/imports", response_model=ImportHistoryResponse)
 def list_imports(db: Session = Depends(get_db)):
     rows = (
         db.query(ImportBatch)
@@ -981,7 +1178,41 @@ def list_imports(db: Session = Depends(get_db)):
         .order_by(ImportBatch.imported_at.desc())
         .all()
     )
-    return [_import_summary(row) for row in rows]
+    items = [_import_summary(row) for row in rows]
+    return ImportHistoryResponse(
+        stats=ImportHistoryStats(
+            total_batches=len(items),
+            processing_batches=sum(item.status == "processing" for item in items),
+            review_batches=sum(item.status == "review" for item in items),
+            completed_batches=sum(item.status == "committed" for item in items),
+            discarded_batches=sum(item.status == "discarded" for item in items),
+            reverted_batches=sum(item.status == "reverted" for item in items),
+            failed_batches=sum(item.status == "failed" for item in items),
+            total_records=sum(item.candidate_count for item in items),
+            committed_records=sum(item.committed_count for item in items),
+            pending_records=sum(item.pending_count for item in items),
+            ignored_records=sum(item.ignored_count for item in items),
+            failed_records=sum(item.failed_count for item in items),
+        ),
+        items=items,
+    )
+
+
+@router.get("/imports/{import_id}", response_model=ImportDetailResponse)
+def get_import(import_id: int, db: Session = Depends(get_db)):
+    batch = (
+        db.query(ImportBatch)
+        .options(joinedload(ImportBatch.review_candidates))
+        .filter(ImportBatch.id == import_id)
+        .first()
+    )
+    if batch is None:
+        raise HTTPException(404, "录入记录不存在")
+    summary = _import_summary(batch)
+    return ImportDetailResponse(
+        **summary.model_dump(),
+        candidates=[_candidate_response(row) for row in batch.review_candidates],
+    )
 
 
 def _asset_total_as_of(db: Session, as_of: date) -> int:

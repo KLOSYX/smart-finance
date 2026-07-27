@@ -9,6 +9,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReviewCenter from './ReviewCenter';
 import SmartEntryDialog from './SmartEntryDialog';
+import ImportHistory from './ImportHistory';
 import { useHouseholdSettings } from '../contexts/HouseholdSettingsContext';
 
 const drawerWidth = 208;
@@ -59,6 +60,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </Stack>
           <Box sx={{ flex: 1 }} />
           <Stack direction="row" gap={1} alignItems="center">
+            <ImportHistory />
             <ReviewCenter />
           </Stack>
         </Toolbar>

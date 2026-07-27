@@ -63,6 +63,43 @@ export interface Settings {
   language: string;
 }
 
+export interface ImportSummary {
+  id: number;
+  filename: string;
+  source_type: string;
+  import_kind: string;
+  status: 'processing' | 'review' | 'committed' | 'failed' | 'discarded' | 'reverted';
+  imported_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  error_message: string | null;
+  attempt_count: number;
+  candidate_count: number;
+  committed_count: number;
+  pending_count: number;
+  ignored_count: number;
+  reverted_count: number;
+  failed_count: number;
+}
+
+export interface ImportHistory {
+  stats: {
+    total_batches: number;
+    processing_batches: number;
+    review_batches: number;
+    completed_batches: number;
+    discarded_batches: number;
+    reverted_batches: number;
+    failed_batches: number;
+    total_records: number;
+    committed_records: number;
+    pending_records: number;
+    ignored_records: number;
+    failed_records: number;
+  };
+  items: ImportSummary[];
+}
+
 export const money = (cents: number) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 2 }).format(cents / 100);
 
