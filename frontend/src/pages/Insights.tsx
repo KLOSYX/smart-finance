@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, IconButton,
-  MenuItem, Select, Stack, TextField, Tooltip, Typography,
+  Stack, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
   ArrowForwardRounded, AutoAwesomeOutlined, CheckCircleOutlineRounded, DeleteOutlineRounded,
@@ -13,6 +13,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api, sendChatMessageStream } from '../api';
 import { EmptyState, PageHeader } from '../components/FinanceUI';
+import ExpenseReconciliation from '../components/ExpenseReconciliation';
 
 interface Insight {
   severity: 'positive' | 'neutral' | 'warning';
@@ -31,7 +32,8 @@ interface ChatMessage {
   error?: boolean;
 }
 
-const currentMonth = new Date().toISOString().slice(0, 7);
+const today = new Date();
+const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 const CHAT_STORAGE_KEY = 'smart-finance-insights-chat-v1';
 const starterQuestions = [
   '这个月支出增加主要来自哪些分类？',
@@ -196,18 +198,20 @@ export default function Insights() {
         title="家庭财务洞察"
         subtitle="从确定性发现出发，与 AI 一起追问原因、核对证据并找到下一步。"
         actions={(
-          <Select
-            aria-label="洞察月份"
+          <TextField
+            label="洞察月份"
+            type="month"
+            size="small"
             value={month}
-            onChange={(event) => setMonth(event.target.value)}
+            onChange={(event) => { if (event.target.value) setMonth(event.target.value); }}
+            slotProps={{ inputLabel: { shrink: true } }}
             sx={{ bgcolor: '#fff', minWidth: 136 }}
-          >
-            <MenuItem value={currentMonth}>{currentMonth.replace('-', ' 年 ')} 月</MenuItem>
-          </Select>
+          />
         )}
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Box sx={{ mb: 2 }}><ExpenseReconciliation month={month} /></Box>
 
       <Box
         sx={{

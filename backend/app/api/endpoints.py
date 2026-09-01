@@ -51,6 +51,7 @@ from app.schemas import (
 )
 from app.services.llm_client import analyze_financial_records, stream_chat_with_data
 from app.services.pdf_processor import extract_text_from_pdf
+from app.services.reconciliation import monthly_reconciliation
 
 
 router = APIRouter()
@@ -1231,6 +1232,16 @@ def _cashflow_totals(rows: list[Cashflow]) -> tuple[int, int, int]:
     refunds = sum(row.amount_cents for row in rows if row.flow_type == "expense_refund")
     net_expense = max(0, expense - refunds)
     return income, net_expense, income - net_expense
+
+
+@router.get("/analytics/reconciliation")
+def reconciliation_analytics(month: str | None = None, db: Session = Depends(get_db)):
+    try:
+        start, end, _ = _month_bounds(month)
+        start - timedelta(days=1)
+    except (ValueError, OverflowError) as exc:
+        raise HTTPException(422, "month is outside the supported calendar range") from exc
+    return monthly_reconciliation(db, start, end, date.today())
 
 
 @router.get("/analytics/overview")

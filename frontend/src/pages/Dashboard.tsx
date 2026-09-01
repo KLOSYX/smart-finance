@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, Grid, LinearProgress, MenuItem, Select, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Grid, LinearProgress, Stack, TextField, Typography } from '@mui/material';
 import { AccountBalanceWalletOutlined, ArrowForwardRounded, AutoAwesomeOutlined, PaidOutlined, SavingsOutlined, TrendingUpOutlined, WarningAmberRounded } from '@mui/icons-material';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { api, money, shortMoney } from '../api';
 import { EmptyState, MetricCard, PageHeader, SectionCard } from '../components/FinanceUI';
+import ExpenseReconciliation from '../components/ExpenseReconciliation';
 
 interface Overview {
   month: string;
@@ -18,7 +19,8 @@ interface Overview {
 }
 
 const colors = ['#3976D8', '#56A5A7', '#8A71D6', '#E5A24B', '#67A76D', '#D97878'];
-const currentMonth = new Date().toISOString().slice(0, 7);
+const today = new Date();
+const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -40,13 +42,14 @@ export default function Dashboard() {
   return (
     <Box>
       <PageHeader title="家庭财务总览" subtitle="从资产、收入与支出三个角度，看清这个月的家庭财务状态。"
-        actions={<Stack direction="row" gap={1}><Button variant="contained" startIcon={<AutoAwesomeOutlined />} onClick={() => window.dispatchEvent(new CustomEvent('open-smart-entry'))}>智能录入</Button><Select size="small" value={month} onChange={(event) => setMonth(event.target.value)} sx={{ bgcolor: '#fff', minWidth: 138 }}><MenuItem value={currentMonth}>{currentMonth.replace('-', ' 年 ')} 月</MenuItem></Select></Stack>} />
+        actions={<Stack direction="row" gap={1}><Button variant="contained" startIcon={<AutoAwesomeOutlined />} onClick={() => window.dispatchEvent(new CustomEvent('open-smart-entry'))}>智能录入</Button><TextField label="总览月份" type="month" size="small" value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} slotProps={{ inputLabel: { shrink: true } }} /></Stack>} />
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Grid container spacing={1.8}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="家庭总资产" value={money(metrics?.total_assets_cents ?? 0)} hint="以最新资产快照计算" icon={<AccountBalanceWalletOutlined />} loading={!data} /></Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月收入" value={money(metrics?.income_cents ?? 0)} hint="不包含账户间转账" icon={<TrendingUpOutlined />} tone="green" loading={!data} /></Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月支出" value={money(metrics?.expense_cents ?? 0)} hint="已扣除支出退款" icon={<PaidOutlined />} tone="orange" loading={!data} /></Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}><MetricCard label="本月现金结余" value={money(metrics?.balance_cents ?? 0)} hint="收入减去净支出" icon={<SavingsOutlined />} tone="violet" loading={!data} /></Grid>
+        <Grid size={{ xs: 12 }}><ExpenseReconciliation month={month} /></Grid>
         <Grid size={{ xs: 12, lg: 8 }}>
           <SectionCard title="家庭资产趋势" subtitle="最近 6 个月的月末资产快照" minHeight={330}>
             <ResponsiveContainer width="100%" height={245}>
