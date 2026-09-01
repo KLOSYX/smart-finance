@@ -14,8 +14,10 @@ import { useSearchParams } from 'react-router-dom';
 import { api, apiErrorMessage, type Cashflow as CashflowRow, type Category, type FlowType, type Role, money } from '../api';
 import { EmptyState, MetricCard, PageHeader, RoleChip, SectionCard } from '../components/FinanceUI';
 import { useHouseholdSettings } from '../contexts/HouseholdSettingsContext';
+import ExpenseReconciliation from '../components/ExpenseReconciliation';
 
-const currentMonth = new Date().toISOString().slice(0, 7);
+const today = new Date();
+const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
 const flowLabels: Record<FlowType, string> = { income: '收入', expense: '支出', expense_refund: '支出退款', transfer: '转账' };
 const colors = ['#3976D8', '#56A57D', '#E4A252', '#8A71D6', '#D97878', '#5B9CB5'];
 const empty = { transaction_date: new Date().toISOString().slice(0, 10), description: '', amount: '', flow_type: 'expense' as FlowType, category_id: 0, channel: '', household_role: 'shared' as Role, card_last_four: '' };
@@ -181,6 +183,10 @@ export default function Cashflow() {
       </Grid>
       <Grid container spacing={1.8}>
         <Grid size={{ xs: 12 }}>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}><TextField label="统计月份" type="month" size="small" value={month} onChange={(event) => { if (event.target.value) setMonth(event.target.value); }} slotProps={{ inputLabel: { shrink: true } }} /></Stack>
+          <ExpenseReconciliation month={month} refreshKey={analytics} />
+        </Grid>
+        <Grid size={{ xs: 12 }}>
           <SectionCard title="分类占比" subtitle="退款已从对应支出中抵扣">
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ minHeight: 36, mb: 1 }}><Tab value="expense" label="支出" /><Tab value="income" label="收入" /></Tabs>
             {breakdown.length ? <Grid container spacing={2} alignItems="center"><Grid size={{ xs: 12, md: 6 }}><ResponsiveContainer width="100%" height={210}><PieChart><Pie data={breakdown} dataKey="value_cents" nameKey="name" innerRadius={52} outerRadius={78}>{breakdown.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}</Pie><ChartTooltip formatter={(value) => money(Number(value))} /></PieChart></ResponsiveContainer></Grid><Grid size={{ xs: 12, md: 6 }}><Stack gap={1}>{breakdown.slice(0, 6).map((item, i) => <Stack key={item.name} direction="row" justifyContent="space-between"><Typography variant="body2"><Box component="span" sx={{ width: 8, height: 8, borderRadius: 8, display: 'inline-block', bgcolor: colors[i % colors.length], mr: 1 }} />{item.name}</Typography><Typography variant="body2" fontWeight={700}>{money(item.value_cents)}</Typography></Stack>)}</Stack></Grid></Grid> : <EmptyState title="暂无分类数据" description="录入流水后可查看分类占比。" />}
@@ -189,7 +195,7 @@ export default function Cashflow() {
         <Grid size={{ xs: 12 }}>
           <Paper variant="outlined" sx={{ borderColor: '#E5EAF1', overflow: 'hidden' }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.2} alignItems={{ sm: 'center' }} sx={{ p: 2, borderBottom: '1px solid #E9EDF2' }}>
-              <TextField type="month" size="small" value={month} onChange={(e) => setMonth(e.target.value)} />
+              <TextField type="month" size="small" value={month} onChange={(e) => { if (e.target.value) setMonth(e.target.value); }} />
               <TextField size="small" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索描述、渠道或卡号" sx={{ minWidth: { sm: 210 } }} />
               <Select size="small" value={type} onChange={(e) => setType(e.target.value)} sx={{ minWidth: 130 }}><MenuItem value="all">全部类型</MenuItem>{Object.entries(flowLabels).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}</Select>
               <Select size="small" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} sx={{ minWidth: 130 }}><MenuItem value="all">全部分类</MenuItem>{categories.filter((item) => item.domain === 'income' || item.domain === 'expense').map((item) => <MenuItem key={item.id} value={String(item.id)}>{item.name}</MenuItem>)}</Select>
